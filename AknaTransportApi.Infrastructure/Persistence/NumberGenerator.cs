@@ -1,7 +1,6 @@
-using AknaTransport.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
-namespace AknaTransport.Infrastructure.Persistence;
+namespace AknaTransportApi.Infrastructure.Persistence;
 
 /// <summary>
 /// İş ve fatura numaralarını PostgreSQL sequence'leri ile üretir. Sequence işlemleri

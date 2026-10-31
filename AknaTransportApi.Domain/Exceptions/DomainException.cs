@@ -1,4 +1,4 @@
-namespace AknaTransport.Domain.Exceptions;
+namespace AknaTransportApi.Domain.Exceptions;
 
 /// <summary>Domain kuralı ihlali. API katmanında 409 Conflict olarak döner.</summary>
 public class DomainException(string message) : Exception(message);

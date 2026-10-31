@@ -1,4 +1,4 @@
-namespace AknaTransport.Infrastructure.EArchive;
+namespace AknaTransportApi.Infrastructure.EArchive;
 
 /// <summary>
 /// e-Arşiv entegratörü ayarları. Kimlik bilgileri environment variable ile verilir:

@@ -1,8 +1,7 @@
-using AknaTransport.Business.Abstractions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace AknaTransport.Infrastructure.Sms;
+namespace AknaTransportApi.Infrastructure.Sms;
 
 /// <summary>
 /// SMS ayarları. Hassas alanlar environment variable ile verilir: Sms__Username, Sms__Password, Sms__ApiKey.

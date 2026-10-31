@@ -1,4 +1,4 @@
-namespace AknaTransport.Business.Common;
+namespace AknaTransportApi.Business.Common;
 
 /// <summary>Uygulama katmanı hatalarının tabanı. API katmanı tipine göre HTTP durum kodu üretir.</summary>
 public abstract class AppException(string message) : Exception(message);

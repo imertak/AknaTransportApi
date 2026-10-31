@@ -1,6 +1,5 @@
-using AknaTransport.Domain.Common;
 
-namespace AknaTransport.Domain.Entities;
+namespace AknaTransportApi.Domain.Entities;
 
 /// <summary>
 /// Refresh token kaydı. Token'ın kendisi değil SHA-256 özeti saklanır.

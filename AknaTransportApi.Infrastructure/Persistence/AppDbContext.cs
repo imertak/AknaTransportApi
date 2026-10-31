@@ -1,8 +1,6 @@
-using AknaTransport.Domain.Common;
-using AknaTransport.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace AknaTransport.Infrastructure.Persistence;
+namespace AknaTransportApi.Infrastructure.Persistence;
 
 public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider clock) : DbContext(options)
 {

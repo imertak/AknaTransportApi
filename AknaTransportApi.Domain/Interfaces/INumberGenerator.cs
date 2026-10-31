@@ -1,4 +1,4 @@
-namespace AknaTransport.Domain.Interfaces;
+namespace AknaTransportApi.Domain.Interfaces;
 
 /// <summary>Benzersiz ve sıralı iş / fatura numarası üretir (ör. AKN-2026-000001).</summary>
 public interface INumberGenerator

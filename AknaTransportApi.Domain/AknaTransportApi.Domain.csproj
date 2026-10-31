@@ -1,9 +1,6 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Domain hiçbir projeye ve altyapı paketine bağımlı değildir. -->
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+    <RootNamespace>AknaTransportApi.Domain</RootNamespace>
   </PropertyGroup>
-
 </Project>

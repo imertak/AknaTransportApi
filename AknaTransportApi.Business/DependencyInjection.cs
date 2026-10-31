@@ -1,17 +1,8 @@
-using AknaTransport.Business.Features.Auth;
-using AknaTransport.Business.Features.Customers;
-using AknaTransport.Business.Features.Dashboard;
-using AknaTransport.Business.Features.Invoices;
-using AknaTransport.Business.Features.Jobs;
-using AknaTransport.Business.Features.Locations;
-using AknaTransport.Business.Features.Outbox;
-using AknaTransport.Business.Features.Reports;
-using AknaTransport.Business.Features.Users;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace AknaTransport.Business;
+namespace AknaTransportApi.Business;
 
 public static class DependencyInjection
 {

@@ -1,8 +1,7 @@
-using AknaTransport.Business.Abstractions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace AknaTransport.Infrastructure.EArchive;
+namespace AknaTransportApi.Infrastructure.EArchive;
 
 /// <summary>
 /// Somut e-Arşiv entegratörü. Her sağlayıcı (Uyumsoft, Logo, Sovos/Foriba, QNB eFinans vb.)

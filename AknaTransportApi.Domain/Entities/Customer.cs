@@ -1,6 +1,5 @@
-using AknaTransport.Domain.Common;
 
-namespace AknaTransport.Domain.Entities;
+namespace AknaTransportApi.Domain.Entities;
 
 public class Customer : Entity, IHasTimestamps
 {

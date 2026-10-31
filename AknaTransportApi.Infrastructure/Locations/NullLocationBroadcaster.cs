@@ -1,7 +1,5 @@
-using AknaTransport.Business.Abstractions;
-using AknaTransport.Business.Features.Locations;
 
-namespace AknaTransport.Infrastructure.Locations;
+namespace AknaTransportApi.Infrastructure.Locations;
 
 /// <summary>
 /// Varsayılan konum yayıncısı: gerçek zamanlı yayın yapmaz. SignalR eklendiğinde

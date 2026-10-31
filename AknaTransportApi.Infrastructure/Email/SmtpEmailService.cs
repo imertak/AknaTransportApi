@@ -1,11 +1,10 @@
-using AknaTransport.Business.Abstractions;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeKit;
 
-namespace AknaTransport.Infrastructure.Email;
+namespace AknaTransportApi.Infrastructure.Email;
 
 /// <summary>MailKit tabanlı SMTP gönderici. Yapılandırma eksikse gönderim yapmaz ve hata fırlatır.</summary>
 public sealed class SmtpEmailService(IOptions<EmailOptions> options, ILogger<SmtpEmailService> logger) : IEmailService

@@ -1,10 +1,8 @@
-using AknaTransport.Business.Abstractions;
-using AknaTransport.Business.Features.Dashboard;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 
-namespace AknaTransport.Infrastructure.Pdf;
+namespace AknaTransportApi.Infrastructure.Pdf;
 
 /// <summary>
 /// Taslak fatura önizlemesi. Resmi e-Arşiv faturası değildir; her sayfada "TASLAK" filigranı ve

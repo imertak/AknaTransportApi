@@ -1,6 +1,5 @@
-using AknaTransport.Domain.Common;
 
-namespace AknaTransport.Domain.Entities;
+namespace AknaTransportApi.Domain.Entities;
 
 /// <summary>Konum geçmişi kaydı. Yalnızca filtreden geçen (anlamlı) konumlar yazılır.</summary>
 public class Location : Entity

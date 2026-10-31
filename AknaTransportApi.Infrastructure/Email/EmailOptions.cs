@@ -1,4 +1,4 @@
-namespace AknaTransport.Infrastructure.Email;
+namespace AknaTransportApi.Infrastructure.Email;
 
 /// <summary>
 /// SMTP ayarları. Şifre environment variable ile verilir: Email__Password.

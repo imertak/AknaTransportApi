@@ -1,8 +1,5 @@
-using AknaTransport.Domain.Common;
-using AknaTransport.Domain.Enums;
-using AknaTransport.Domain.Exceptions;
 
-namespace AknaTransport.Domain.Entities;
+namespace AknaTransportApi.Domain.Entities;
 
 /// <summary>
 /// Nakliye işi. Durum geçişleri yalnızca bu sınıftaki metotlarla yapılır;

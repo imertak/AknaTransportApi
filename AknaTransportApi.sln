@@ -1,15 +1,17 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36717.8
 MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AknaTransportApi.Api", "AknaTransportApi.Api\AknaTransportApi.Api.csproj", "{36667D4F-23BD-5266-D847-37A073AD5C9D}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AknaTransportApi.Business", "AknaTransportApi.Business\AknaTransportApi.Business.csproj", "{9DC06597-D677-A341-264A-3049FA3AC743}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AknaTransportApi.Domain", "AknaTransportApi.Domain\AknaTransportApi.Domain.csproj", "{F48C524F-D71E-4EC0-EF4F-26D03294F820}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AknaTransportApi.Infrastructure", "AknaTransportApi.Infrastructure\AknaTransportApi.Infrastructure.csproj", "{BFC46D68-6D5F-31EE-F12B-8447E81A85EF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AknaTransport.Api", "AknaTransport.Api\AknaTransport.Api.csproj", "{36667D4F-23BD-5266-D847-37A073AD5C9D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AknaTransportApi.Business.Tests", "AknaTransportApi.Business.Tests\AknaTransportApi.Business.Tests.csproj", "{6A2B7C1D-3E4F-4A5B-8C9D-0E1F2A3B4C5D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -17,6 +19,10 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{36667D4F-23BD-5266-D847-37A073AD5C9D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{36667D4F-23BD-5266-D847-37A073AD5C9D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{36667D4F-23BD-5266-D847-37A073AD5C9D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{36667D4F-23BD-5266-D847-37A073AD5C9D}.Release|Any CPU.Build.0 = Release|Any CPU
 		{9DC06597-D677-A341-264A-3049FA3AC743}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{9DC06597-D677-A341-264A-3049FA3AC743}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9DC06597-D677-A341-264A-3049FA3AC743}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -29,10 +35,10 @@ Global
 		{BFC46D68-6D5F-31EE-F12B-8447E81A85EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BFC46D68-6D5F-31EE-F12B-8447E81A85EF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BFC46D68-6D5F-31EE-F12B-8447E81A85EF}.Release|Any CPU.Build.0 = Release|Any CPU
-		{36667D4F-23BD-5266-D847-37A073AD5C9D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{36667D4F-23BD-5266-D847-37A073AD5C9D}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{36667D4F-23BD-5266-D847-37A073AD5C9D}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{36667D4F-23BD-5266-D847-37A073AD5C9D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6A2B7C1D-3E4F-4A5B-8C9D-0E1F2A3B4C5D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6A2B7C1D-3E4F-4A5B-8C9D-0E1F2A3B4C5D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6A2B7C1D-3E4F-4A5B-8C9D-0E1F2A3B4C5D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6A2B7C1D-3E4F-4A5B-8C9D-0E1F2A3B4C5D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

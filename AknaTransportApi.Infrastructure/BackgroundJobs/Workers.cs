@@ -1,16 +1,10 @@
-using AknaTransport.Business.Features.Invoices;
-using AknaTransport.Business.Features.Locations;
-using AknaTransport.Business.Features.Outbox;
-using AknaTransport.Business.Options;
-using AknaTransport.Domain.Entities;
-using AknaTransport.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace AknaTransport.Infrastructure.BackgroundJobs;
+namespace AknaTransportApi.Infrastructure.BackgroundJobs;
 
 public sealed class BackgroundJobOptions
 {

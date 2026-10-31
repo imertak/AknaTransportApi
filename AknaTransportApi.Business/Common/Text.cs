@@ -1,6 +1,6 @@
 using System.Net.Mail;
 
-namespace AknaTransport.Business.Common;
+namespace AknaTransportApi.Business.Common;
 
 public static class Text
 {

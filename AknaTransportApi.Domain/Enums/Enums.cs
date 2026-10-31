@@ -1,4 +1,4 @@
-namespace AknaTransport.Domain.Enums;
+namespace AknaTransportApi.Domain.Enums;
 
 /// <summary>Kullanıcı rolleri. User şoförü ifade eder; Admin aynı zamanda şoför işlemlerini yapabilir.</summary>
 public enum UserRole

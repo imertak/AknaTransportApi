@@ -1,4 +1,4 @@
-namespace AknaTransport.Infrastructure.Security;
+namespace AknaTransportApi.Infrastructure.Security;
 
 public sealed class JwtOptions
 {

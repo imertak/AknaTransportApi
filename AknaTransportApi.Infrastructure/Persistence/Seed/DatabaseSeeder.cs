@@ -1,17 +1,14 @@
-using AknaTransport.Business.Abstractions;
-using AknaTransport.Domain.Entities;
-using AknaTransport.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace AknaTransport.Infrastructure.Persistence.Seed;
+namespace AknaTransportApi.Infrastructure.Persistence.Seed;
 
 public sealed class DatabaseSeeder(
     AppDbContext db,
     IPasswordHasher passwordHasher,
-    AknaTransport.Domain.Interfaces.INumberGenerator numberGenerator,
+    INumberGenerator numberGenerator,
     IOptions<SeedOptions> options,
     IOptions<DatabaseOptions> databaseOptions,
     IHostEnvironment environment,
