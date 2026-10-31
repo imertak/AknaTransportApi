@@ -5,8 +5,9 @@ using QuestPDF.Infrastructure;
 namespace AknaTransportApi.Infrastructure.Pdf;
 
 /// <summary>
-/// Taslak fatura önizlemesi. Resmi e-Arşiv faturası değildir; her sayfada "TASLAK" filigranı ve
-/// "Resmi fatura yerine geçmez" uyarısı bulunur.
+/// Fatura PDF'i. Taslakta her sayfada "TASLAK" filigranı ve "resmi fatura değildir" uyarısı bulunur.
+/// <see cref="DraftInvoiceDocument.Official"/> ise (e-Arşiv'de kesilmiş, PDF vermeyen sağlayıcı) filigran yerine
+/// GİB fatura numarası ve ETTN yazılır.
 /// </summary>
 public sealed class QuestPdfDraftInvoiceGenerator(IBusinessCalendar calendar) : IDraftInvoicePdfGenerator
 {
@@ -20,8 +21,9 @@ public sealed class QuestPdfDraftInvoiceGenerator(IBusinessCalendar calendar) : 
                 page.Size(PageSizes.A4);
                 page.Margin(36);
                 page.DefaultTextStyle(t => t.FontSize(9.5f));
-                page.Background().AlignCenter().AlignMiddle().Rotate(-35)
-                    .Text("TASLAK").FontSize(110).Bold().FontColor("#EEEEEE");
+                if (!d.Official)
+                    page.Background().AlignCenter().AlignMiddle().Rotate(-35)
+                        .Text("TASLAK").FontSize(110).Bold().FontColor("#EEEEEE");
 
                 page.Header().Column(col =>
                 {
@@ -29,18 +31,31 @@ public sealed class QuestPdfDraftInvoiceGenerator(IBusinessCalendar calendar) : 
                     {
                         row.RelativeItem().Column(c =>
                         {
-                            c.Item().Text("AKNA TRANSPORT").FontSize(18).Bold().LetterSpacing(0.08f);
-                            c.Item().Text("TASLAK FATURA").FontSize(11).SemiBold();
+                            c.Item().Text(d.CompanyName.ToUpper(PdfFormat.Turkish)).FontSize(18).Bold().LetterSpacing(0.08f);
+                            c.Item().Text(d.Official ? "e-ARŞİV FATURA" : "TASLAK FATURA").FontSize(11).SemiBold();
+                            if (d.WithholdingLabel is not null) c.Item().Text("Fatura tipi: TEVKİFAT").FontSize(9);
                         });
-                        row.ConstantItem(200).AlignRight().Column(c =>
+                        row.ConstantItem(220).AlignRight().Column(c =>
                         {
-                            c.Item().AlignRight().Text($"Taslak No: {d.InvoiceNumber}").SemiBold();
+                            if (d.Official)
+                            {
+                                c.Item().AlignRight().Text($"Fatura No: {d.EArchiveInvoiceNumber ?? d.InvoiceNumber}").SemiBold();
+                                if (d.Ettn is not null) c.Item().AlignRight().Text($"ETTN: {d.Ettn}").FontSize(7.5f);
+                            }
+                            else
+                            {
+                                c.Item().AlignRight().Text($"Taslak No: {d.InvoiceNumber}").SemiBold();
+                            }
                             c.Item().AlignRight().Text($"Tarih: {PdfFormat.Date(d.InvoiceDate)}");
-                            c.Item().AlignRight().Text($"Durum: {d.Status}");
+                            if (!d.Official) c.Item().AlignRight().Text($"Durum: {d.Status}");
                         });
                     });
-                    col.Item().PaddingTop(8).Border(1).Padding(6).AlignCenter()
-                        .Text("BU BELGE RESMİ FATURA DEĞİLDİR. e-Arşiv faturası kesildiğinde geçerlilik kazanır.").SemiBold();
+                    if (d.Official)
+                        col.Item().PaddingTop(8).Border(1).Padding(6).AlignCenter()
+                            .Text("e-Arşiv izni kapsamında elektronik ortamda iletilmiştir.").SemiBold();
+                    else
+                        col.Item().PaddingTop(8).Border(1).Padding(6).AlignCenter()
+                            .Text("BU BELGE RESMİ FATURA DEĞİLDİR. e-Arşiv faturası kesildiğinde geçerlilik kazanır.").SemiBold();
                 });
 
                 page.Content().PaddingTop(16).Column(col =>
@@ -80,7 +95,26 @@ public sealed class QuestPdfDraftInvoiceGenerator(IBusinessCalendar calendar) : 
                     {
                         Total(t, "Ara Toplam", PdfFormat.Money(d.SubTotal, d.Currency), false);
                         Total(t, $"KDV (%{d.VatRate.ToString("0.##", PdfFormat.Turkish)})", PdfFormat.Money(d.VatAmount, d.Currency), false);
-                        Total(t, "Genel Toplam", PdfFormat.Money(d.GrandTotal, d.Currency), true);
+                        if (d.WithholdingLabel is null)
+                        {
+                            Total(t, "Genel Toplam", PdfFormat.Money(d.GrandTotal, d.Currency), true);
+                        }
+                        else
+                        {
+                            Total(t, "Vergiler Dahil Toplam", PdfFormat.Money(d.GrandTotal, d.Currency), false);
+                            Total(t, d.WithholdingLabel, "-" + PdfFormat.Money(d.WithholdingAmount, d.Currency), false);
+                            Total(t, "Ödenecek Tutar", PdfFormat.Money(d.PayableAmount ?? d.GrandTotal, d.Currency), true);
+                        }
+                    });
+
+                    // Açıklama: yazıyla tutar, IBAN ve not.
+                    col.Item().PaddingTop(16).Border(0.5f).BorderColor("#BDBDBD").Padding(8).Column(n =>
+                    {
+                        n.Item().Text("AÇIKLAMA").FontSize(8).SemiBold().FontColor("#555555");
+                        if (d.AmountInWords is not null) n.Item().PaddingTop(3).Text(d.AmountInWords).SemiBold();
+                        if (d.Iban is not null)
+                            n.Item().PaddingTop(3).Text(d.BankName is null ? $"IBAN: {d.Iban}" : $"IBAN: {d.Iban} ({d.BankName})");
+                        if (!string.IsNullOrWhiteSpace(d.Notes)) n.Item().PaddingTop(3).Text(d.Notes);
                     });
                 });
 

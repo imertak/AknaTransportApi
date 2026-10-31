@@ -29,4 +29,18 @@ public sealed record DraftInvoiceDocument(
     decimal VatAmount,
     decimal GrandTotal,
     string Currency,
-    DateTime GeneratedAtUtc);
+    DateTime GeneratedAtUtc)
+{
+    /// <summary>true: e-Arşiv'de kesilmiş fatura (filigransız, GİB numarası ve ETTN ile).</summary>
+    public bool Official { get; init; }
+    public string? EArchiveInvoiceNumber { get; init; }
+    public string? Ettn { get; init; }
+    public string? WithholdingLabel { get; init; }
+    public decimal WithholdingAmount { get; init; }
+    public decimal? PayableAmount { get; init; }
+    public string? AmountInWords { get; init; }
+    public string? Iban { get; init; }
+    public string? BankName { get; init; }
+    public string? Notes { get; init; }
+    public string CompanyName { get; init; } = "AKNA Transport";
+}

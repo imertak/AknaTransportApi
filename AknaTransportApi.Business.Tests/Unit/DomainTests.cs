@@ -133,3 +133,47 @@ public class GeoTests
         Assert.Equal(0, Geo.DistanceMeters(41, 29, 41, 29), 3);
     }
 }
+
+public class InvoiceTextTests
+{
+    [Theory]
+    [InlineData(0, "YALNIZ: SIFIR TÜRK LİRASI")]
+    [InlineData(1000, "YALNIZ: BİN TÜRK LİRASI")]
+    [InlineData(9000, "YALNIZ: DOKUZ BİN TÜRK LİRASI")]
+    [InlineData(4640, "YALNIZ: DÖRT BİN ALTI YÜZ KIRK TÜRK LİRASI")]
+    [InlineData(101.05, "YALNIZ: YÜZ BİR TÜRK LİRASI BEŞ KURUŞ")]
+    [InlineData(1234567.89, "YALNIZ: BİR MİLYON İKİ YÜZ OTUZ DÖRT BİN BEŞ YÜZ ALTMIŞ YEDİ TÜRK LİRASI SEKSEN DOKUZ KURUŞ")]
+    public void Amount_is_written_in_turkish(double amount, string expected) =>
+        Assert.Equal(expected, AmountInWords.Write((decimal)amount));
+
+    [Theory]
+    [InlineData("TR33 0006 1005 1978 6457 8413 26", true)]
+    [InlineData("tr330006100519786457841326", true)]
+    [InlineData("TR330006100519786457841327", false)]
+    [InlineData("TR3300061005197864578413", false)]
+    [InlineData("", false)]
+    public void Iban_is_validated(string iban, bool valid) => Assert.Equal(valid, Iban.IsValid(iban));
+
+    [Fact]
+    public void Withholding_is_deducted_from_payable_amount()
+    {
+        var invoice = new Invoice { Currency = "TRY" };
+        invoice.Items.Add(new InvoiceItem { Quantity = 1, UnitPrice = 4000m });
+        invoice.Items.Add(new InvoiceItem { Quantity = 1, UnitPrice = 3500m });
+
+        invoice.Recalculate(20m, WithholdingTypes.Find("624"));
+        Assert.Equal(7500m, invoice.SubTotal);
+        Assert.Equal(1500m, invoice.VatAmount);
+        Assert.Equal(9000m, invoice.GrandTotal);
+        Assert.Equal(300m, invoice.WithholdingAmount);
+        Assert.Equal(8700m, invoice.PayableAmount);
+        Assert.Equal("YALNIZ: SEKİZ BİN YEDİ YÜZ TÜRK LİRASI", invoice.AmountInWordsText);
+
+        invoice.Recalculate(20m);
+        Assert.Null(invoice.WithholdingCode);
+        Assert.Equal(0m, invoice.WithholdingAmount);
+        Assert.Equal(9000m, invoice.PayableAmount);
+
+        Assert.Throws<DomainException>(() => invoice.Recalculate(0m, WithholdingTypes.Find("624")));
+    }
+}

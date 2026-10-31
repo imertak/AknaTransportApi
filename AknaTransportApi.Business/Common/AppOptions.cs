@@ -18,6 +18,15 @@ public sealed class AppOptions
 
     public decimal DefaultVatRate { get; set; } = 20;
 
+    /// <summary>Faturalarda yazılacak firma IBAN'ı (environment variable: App__CompanyIban).</summary>
+    public string? CompanyIban { get; set; }
+
+    /// <summary>IBAN'ın ait olduğu banka adı (ör. "Ziraat Bankası"). Faturada IBAN ile birlikte yazılır.</summary>
+    public string? CompanyBankName { get; set; }
+
+    /// <summary>Varsayılan KDV tevkifat kodu (ör. 624 Yük taşımacılığı). Boşsa faturalar tevkifatsız açılır.</summary>
+    public string? DefaultWithholdingCode { get; set; }
+
     /// <summary>Raporlarda ve dashboard'da "bugün" hesabı için saat dilimi.</summary>
     public string TimeZoneId { get; set; } = "Europe/Istanbul";
 }

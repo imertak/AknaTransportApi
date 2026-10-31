@@ -11,5 +11,8 @@ public static class InvoiceMappings
         i.Items.OrderBy(x => x.Id).Select(x => (Guid?)x.JobId).FirstOrDefault(),
         i.Items.OrderBy(x => x.Id).Select(x => x.Job!.JobNumber).FirstOrDefault(),
         i.Notes ?? i.Items.OrderBy(x => x.Id).Select(x => x.Description).FirstOrDefault(),
-        i.Customer!.Email);
+        i.Customer!.Email,
+        i.WithholdingCode,
+        i.WithholdingAmount,
+        i.PayableAmount);
 }

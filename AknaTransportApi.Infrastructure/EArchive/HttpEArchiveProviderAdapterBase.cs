@@ -24,9 +24,9 @@ public abstract class HttpEArchiveProviderAdapterBase(HttpClient httpClient, IOp
 
     public abstract string Name { get; }
     public abstract Task<EArchiveSendResult> SendInvoiceAsync(EArchiveInvoiceRequest request, CancellationToken cancellationToken);
-    public abstract Task<EArchiveStatusResult> GetStatusAsync(string reference, CancellationToken cancellationToken);
-    public abstract Task<byte[]> GetPdfAsync(string reference, CancellationToken cancellationToken);
-    public abstract Task<EArchiveCancelResult> CancelAsync(string reference, string reason, CancellationToken cancellationToken);
+    public abstract Task<EArchiveStatusResult> GetStatusAsync(EArchiveDocumentKey key, CancellationToken cancellationToken);
+    public abstract Task<byte[]> GetPdfAsync(EArchiveDocumentKey key, CancellationToken cancellationToken);
+    public abstract Task<EArchiveCancelResult> CancelAsync(EArchiveDocumentKey key, string reason, CancellationToken cancellationToken);
 
     protected async Task<TResponse> PostJsonAsync<TRequest, TResponse>(string path, TRequest body, CancellationToken ct)
     {

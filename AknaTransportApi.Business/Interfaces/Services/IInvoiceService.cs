@@ -12,6 +12,20 @@ public interface IInvoiceService
     Task<InvoiceDetailDto> CreateAsync(CreateInvoiceRequest request, CancellationToken ct);
     Task<InvoiceDetailDto> UpdateAsync(Guid id, UpdateInvoiceRequest request, CancellationToken ct);
     Task<InvoiceDetailDto> IssueAsync(Guid id, CancellationToken ct);
+
+    /// <summary>GİB portalında bekleyen taslak için imza SMS'i gönderir.</summary>
+    Task<EArchiveSmsChallengeDto> SendSignSmsAsync(Guid id, CancellationToken ct);
+
+    /// <summary>SMS kodunu doğrular; GİB imzayı onaylarsa fatura Issued olur.</summary>
+    Task<InvoiceDetailDto> SignAsync(Guid id, SignInvoiceRequest request, CancellationToken ct);
+
+    /// <summary>Sağlayıcıdaki imzalanmamış taslağı siler ve faturayı düzenlenebilir taslağa döndürür.</summary>
+    Task<InvoiceDetailDto> DiscardEArchiveDraftAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Sağlayıcının belge görüntüsü (GİB portalı HTML).</summary>
+    Task<FileDownload> GetEArchiveViewAsync(Guid id, CancellationToken ct);
+
+    IReadOnlyList<WithholdingTypeDto> GetWithholdingTypes();
     Task<InvoiceDetailDto> CancelAsync(Guid id, CancelInvoiceRequest request, CancellationToken ct);
     Task<InvoiceDetailDto> ResendEmailAsync(Guid id, CancellationToken ct);
     Task<FileDownload> GetPdfAsync(Guid id, CancellationToken ct);

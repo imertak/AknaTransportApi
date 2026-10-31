@@ -14,6 +14,11 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         b.Property(x => x.VatRate).HasPrecision(5, 2);
         b.Property(x => x.VatAmount).HasPrecision(18, 2);
         b.Property(x => x.GrandTotal).HasPrecision(18, 2);
+        b.Property(x => x.WithholdingCode).HasMaxLength(10);
+        b.Property(x => x.WithholdingRate).HasPrecision(5, 2);
+        b.Property(x => x.WithholdingAmount).HasPrecision(18, 2);
+        b.Property(x => x.PayableAmount).HasPrecision(18, 2);
+        b.Property(x => x.Iban).HasMaxLength(34);
         b.Property(x => x.Currency).HasMaxLength(3).IsRequired();
         b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
         b.Property(x => x.Notes).HasMaxLength(2000);
@@ -25,6 +30,7 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         b.Property(x => x.LastError).HasMaxLength(2000);
         b.Property(x => x.ConcurrencyStamp).IsConcurrencyToken();
         b.Ignore(x => x.IsEditable);
+        b.Ignore(x => x.AmountInWordsText);
 
         b.HasIndex(x => x.InvoiceNumber).IsUnique();
         b.HasIndex(x => x.EArchiveReference).IsUnique();
