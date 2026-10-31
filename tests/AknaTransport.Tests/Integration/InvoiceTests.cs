@@ -1,3 +1,4 @@
+using AknaTransport.Business.Common;
 using System.Net;
 using AknaTransport.Business.Features.Invoices;
 using AknaTransport.Business.Features.Outbox;
@@ -59,6 +60,21 @@ public class InvoiceTests(AknaApiFactory factory) : IClassFixture<AknaApiFactory
         // Taslak iptal edilince iş yeniden faturalanabilir.
         await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{invoice.Id}/cancel", new CancelInvoiceRequest { Reason = "Hatalı" }, admin);
         await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest { JobIds = [jobId] }, admin);
+    }
+
+    [Fact]
+    public async Task Invoice_list_includes_job_and_description_for_mobile_list()
+    {
+        var (admin, customerId, jobId) = await CompletedJobAsync();
+        var invoice = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices",
+            new CreateInvoiceRequest { JobIds = [jobId], Notes = "Ekim taşımaları" }, admin);
+
+        var page = await _client.OkAsync<PagedResult<InvoiceListItemDto>>(HttpMethod.Get, $"/api/invoices?customerId={customerId}", null, admin);
+        var item = Assert.Single(page.Items, i => i.Id == invoice.Id);
+        Assert.Equal(jobId, item.FirstJobId);
+        Assert.Equal(invoice.Items[0].JobNumber, item.FirstJobNumber);
+        Assert.Equal("Ekim taşımaları", item.Description);
+        Assert.Equal(invoice.CustomerEmail, item.CustomerEmail);
     }
 
     [Fact]
