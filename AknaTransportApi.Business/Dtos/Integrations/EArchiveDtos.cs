@@ -25,7 +25,19 @@ public sealed record EArchiveInvoiceRequest(
     decimal SubTotal,
     decimal VatAmount,
     decimal GrandTotal,
-    string? Notes);
+    string? Notes,
+    // KDV tevkifatı (kod boşsa yok). Oran KDV'nin yüzdesidir (2/10 → 20).
+    string? WithholdingCode = null,
+    decimal WithholdingRate = 0,
+    decimal WithholdingAmount = 0,
+    /// Ödenecek tutar (genel toplam − tevkifat).
+    decimal? PayableAmount = null);
+
+/// <summary>Sağlayıcıdaki belgeyi bulmak için gereken bilgiler. GİB portalı listeyi tarihe göre sorgular.</summary>
+public sealed record EArchiveDocumentKey(string Reference, DateOnly InvoiceDate);
+
+/// <summary>SMS ile imza başlatıldı: kod kayıtlı yetkili telefonuna gönderildi.</summary>
+public sealed record EArchiveSmsChallenge(string OperationId, string? MaskedPhone);
 
 public sealed record EArchiveSendResult(
     bool Accepted,

@@ -52,11 +52,11 @@ public sealed class FakeEArchiveAdapter : IEArchiveProviderAdapter
         };
     }
 
-    public Task<EArchiveStatusResult> GetStatusAsync(string reference, CancellationToken cancellationToken) =>
+    public Task<EArchiveStatusResult> GetStatusAsync(EArchiveDocumentKey key, CancellationToken cancellationToken) =>
         Task.FromResult(new EArchiveStatusResult(EArchiveDocumentStatus.Issued, null, null, null));
 
-    public Task<byte[]> GetPdfAsync(string reference, CancellationToken cancellationToken) => Task.FromResult(PdfBytes);
+    public Task<byte[]> GetPdfAsync(EArchiveDocumentKey key, CancellationToken cancellationToken) => Task.FromResult(PdfBytes);
 
-    public Task<EArchiveCancelResult> CancelAsync(string reference, string reason, CancellationToken cancellationToken) =>
+    public Task<EArchiveCancelResult> CancelAsync(EArchiveDocumentKey key, string reason, CancellationToken cancellationToken) =>
         Task.FromResult(new EArchiveCancelResult(true, null));
 }

@@ -53,7 +53,10 @@ public static class DependencyInjection
         // Entegrasyonlar
         services.AddSingleton<IEmailService, SmtpEmailService>();
         services.AddSingleton<ISmsService, SmsService>();
+        services.AddMemoryCache();
         services.AddScoped<IEArchiveInvoiceService, EArchiveInvoiceService>();
+        // GİB e-Arşiv portalı yerleşik adaptördür; yalnızca EArchive__Provider=GibPortal ise kullanılır.
+        services.AddEArchiveProvider<GibPortalEArchiveAdapter>();
         services.AddSingleton<IJobReportPdfGenerator, QuestPdfJobReportGenerator>();
         services.AddSingleton<IDraftInvoicePdfGenerator, QuestPdfDraftInvoiceGenerator>();
         services.AddSingleton<IFileStorage, LocalFileStorage>();

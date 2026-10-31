@@ -126,7 +126,12 @@ Veritabanı notları:
 | `Seed__AdminEmail`, `Seed__AdminPassword` | İlk kurulumda | Aktif yönetici yoksa oluşturulur |
 | `Email__Host`, `Email__Port`, `Email__Username`, `Email__Password`, `Email__FromEmail`, `Email__FromName` | Fatura e-postası için | SMTP. `Email__Security`: Auto / StartTls / SslOnConnect / None |
 | `Sms__Provider`, `Sms__ApiUrl`, `Sms__Username`, `Sms__Password`, `Sms__ApiKey`, `Sms__Sender` | SMS için | Bkz. [SMS](#sms-ile-kullanıcı-şifresi) |
-| `EArchive__Provider`, `EArchive__ApiUrl`, `EArchive__ApiKey`, `EArchive__Username`, `EArchive__Password`, `EArchive__SupplierTaxNumber`, `EArchive__InvoiceSeries` | Gerçek fatura için | Bkz. [e-Arşiv](#fatura-e-arşiv-ve-e-posta) |
+| `EArchive__Provider` | Gerçek fatura için | `GibPortal` (GİB e-Arşiv portalı, yerleşik) veya eklenen özel entegratörün adı. Boşsa e-Arşiv kapalıdır. |
+| `EArchive__Username`, `EArchive__Password` | GİB portalı için | e-Arşiv portalı kullanıcı kodu ve şifresi (İnteraktif Vergi Dairesi'nden alınır). |
+| `EArchive__UseTestEnvironment` | Hayır | `true`: GİB test portalı (earsivportaltest.efatura.gov.tr) |
+| `EArchive__ApiUrl`, `EArchive__ApiKey` | Özel entegratör için | Bkz. [e-Arşiv](#fatura-e-arşiv-ve-e-posta) |
+| `App__CompanyIban`, `App__CompanyBankName` | Önerilir | Faturanın açıklamasına yazılan IBAN ve banka adı (istekte IBAN verilmezse) |
+| `App__DefaultWithholdingCode` | Hayır | Varsayılan KDV tevkifat kodu (ör. `624`). Boşsa faturalar tevkifatsız açılır. |
 | `App__PasswordResetUrl` | Hayır | Şifre sıfırlama bağlantısı, `{token}` ve `{email}` yer tutucuları |
 | `App__TrackingUrl` | Hayır | Müşteri takip bağlantısı, `{token}` yer tutucusu |
 | `App__TimeZoneId` | Hayır | Varsayılan `Europe/Istanbul` |
@@ -269,7 +274,11 @@ POST /api/jobs
 `POST /me` (şoför cihazının konum akışı; iş kimliği gerekmez, şoförün tüm aktif işlerine yazılır, aktif iş yoksa 409), `POST /update`, `GET /jobs/{jobId}/latest`, `GET /jobs/{jobId}/history` (sayfalı, `from`, `to`), `GET /active-jobs`. Müşteri takip bağlantısı: `GET /api/tracking/{token}` (oturumsuz, yalnızca durum ve konum; fiyat içermez).
 
 ### Faturalar — `/api/invoices` (Admin)
-`GET /`, `GET /{id}`, `POST /`, `PUT /{id}`, `POST /{id}/issue`, `POST /{id}/cancel`, `GET /{id}/pdf`, `GET /{id}/job-report/pdf` (faturadaki işlerin nakliye dökümü), `GET /{id}/jobs`, `POST /{id}/resend-email`.
+`GET /`, `GET /{id}`, `POST /`, `PUT /{id}`, `POST /{id}/issue`, `POST /{id}/cancel`, `GET /{id}/pdf`, `GET /{id}/job-report/pdf` (faturadaki işlerin nakliye dökümü), `GET /{id}/jobs`, `POST /{id}/resend-email`, `GET /withholding-types` (KDV tevkifat kodları).
+
+GİB portalı ile imza: `POST /{id}/earchive/sms` (imza SMS'i), `POST /{id}/earchive/sign` (`{operationId, code}`), `POST /{id}/earchive/discard` (imzalanmamış portal taslağını sil), `GET /{id}/earchive/view` (portalın HTML görüntüsü).
+
+Oluşturma/güncelleme isteğinde `withholdingCode` (ör. `"624"`), `noWithholding` ve `iban` alanları vardır. Yanıtta `withholdingAmount`, `payableAmount` (genel toplam − tevkifat), `amountInWords` ("YALNIZ: ... TÜRK LİRASI"), `iban`, `documentNote` ve `requiresSmsSignature` döner.
 
 Bir faturaya yalnızca aynı müşterinin tamamlanmış ve başka faturada olmayan işleri eklenebilir. İş, taslak oluşturulurken `transport_jobs.InvoiceId` koşullu güncellemesiyle (yalnızca `InvoiceId IS NULL` satırlar, transaction içinde) faturaya bağlanır; bu yüzden aynı iş eşzamanlı iki faturaya eklenemez. Kesim öncesinde her işin hâlâ bu faturaya bağlı ve tamamlanmış olduğu yeniden doğrulanır.
 
@@ -333,9 +342,36 @@ Tamamlanan işler ─▶ POST /api/invoices (Draft) ─▶ POST /{id}/issue ─�
 - Mükerrer gönderim: fatura başına tek `EmailLog` (unique index) ve gönderilmiş kayıt tekrar gönderilmez. (Not: SMTP sunucusu maili kabul ettikten hemen sonra veritabanı yazılamazsa en kötü durumda bir kez daha gönderilebilir; outbox "en az bir kez" garantisi verir.)
 - E-posta konusu: `AKNA Transport - Faturanız ve Nakliye İş Dökümünüz`. Ekler: resmi e-Arşiv PDF'i ve yalnızca o faturadaki işleri içeren iş dökümü PDF'i.
 
+### Tevkifat, yazıyla tutar ve IBAN
+
+- KDV tevkifatı fatura başına seçilir. Oran KDV'nin yüzdesidir: 624 Yük taşımacılığı **2/10** → 4.000 TL + 800 TL KDV için 160 TL tevkifat, ödenecek tutar 4.640 TL. Kodlar `Domain/Common/Withholding.cs` içindedir (KDV Genel Uygulama Tebliği I/C-2.1.3 kısmi tevkifat kodları).
+- Faturanın açıklaması (PDF'te "AÇIKLAMA" bölümü, e-Arşiv'de `not` alanı) şunları içerir: ödenecek tutarın yazıyla gösterimi (`YALNIZ: DÖRT BİN ALTI YÜZ KIRK TÜRK LİRASI`), tevkifat satırı, IBAN (banka adıyla) ve kullanıcı notu.
+- IBAN fatura oluşturulurken faturaya kaydedilir (sonradan ayar değişse de eski faturalar değişmez) ve mod-97 ile doğrulanır.
+
+### GİB e-Arşiv portalı (`EArchive__Provider=GibPortal`)
+
+Portal çağrıları açık kaynak [f/fatura](https://github.com/f/fatura) kütüphanesindeki akışı temel alır; tevkifat alanları (`faturaTipi: TEVKIFAT`, satırda `tevkifatKodu` ve vergi kodu 9015 `V9015Orani/Tutari`) portalın kendi JSON anahtarlarıdır.
+
+```
+POST /{id}/issue ─▶ portal girişi ─▶ taslak oluştur (EARSIV_PORTAL_FATURA_OLUSTUR) ─▶ Pending (requiresSmsSignature)
+POST /{id}/earchive/sms ─▶ kayıtlı yetkili telefonuna SMS ─▶ { operationId, maskedPhone }
+POST /{id}/earchive/sign ─▶ kod doğrulama + imza ─▶ portal "Onaylandı" gösterirse Issued (+ e-posta kuyruğu)
+```
+
+- Fatura **yalnızca GİB imzayı onaylayıp belge portalda "Onaylandı" görünürse** `Issued` olur. Yanlış kodda fatura `Pending` kalır; aynı SMS ile tekrar denenebilir (10 dk).
+- ETTN'i GİB üretir; adaptör oluşturma öncesi/sonrası taslak listesini karşılaştırıp yeni belgeyi alıcı VKN'si ile eşleştirir.
+- Müşterinin 10 haneli VKN'si veya 11 haneli TCKN'si kayıtlı olmalıdır; yoksa portala istek gitmeden fatura `Failed` olur.
+- İmza portalın kendi ekranından yapılırsa `EArchiveStatusSyncWorker` durumu bulur ve faturayı `Issued` yapar.
+- `POST /{id}/earchive/discard` imzalanmamış taslağı portaldan siler, fatura tekrar düzenlenebilir `Draft` olur.
+- İmzalı faturanın iptali portalda **iptal talebi** olarak oluşturulur (`EARSIV_PORTAL_IPTAL_TALEBI_OLUSTUR`); alıcının onayı veya yasal süre ile kesinleşir.
+- Portal PDF vermez: kesilmiş faturanın PDF'i GİB fatura numarası ve ETTN ile API'de üretilir; portalın resmi görüntüsü `GET /{id}/earchive/view` ile alınır.
+- SMS oturumu bellek içi önbellekte tutulur; API birden fazla sunucuda çalışıyorsa SMS gönderme ve imza isteği aynı sunucuya gitmelidir (sticky session).
+- GİB, imza komutunu zaman zaman opak bir kimlikle değiştirir; değişirse `EArchive__GibSmsVerifyCommand` ile kod değiştirmeden güncellenir.
+- Alıcı e-Fatura mükellefiyse GİB e-Arşiv faturasını kabul etmez; bu alıcılar için e-Fatura entegratörü gerekir.
+
 ### Yeni e-Arşiv sağlayıcısı ekleme
 
-1. `Infrastructure/EArchive` altında `HttpEArchiveProviderAdapterBase`'den türeyen bir sınıf yazın (ör. `UyumsoftEArchiveAdapter`). `Name`, `SendInvoiceAsync`, `GetStatusAsync`, `GetPdfAsync`, `CancelAsync` metotlarını sağlayıcı dokümantasyonuna göre uygulayın. `EArchiveInvoiceRequest.InvoiceId` belge UUID'si (ETTN) olarak kullanılabilir; böylece tekrar denemelerde mükerrer belge oluşmaz.
+1. `Infrastructure/EArchive` altında `HttpEArchiveProviderAdapterBase`'den türeyen bir sınıf yazın (ör. `UyumsoftEArchiveAdapter`). `Name`, `SendInvoiceAsync`, `GetStatusAsync`, `GetPdfAsync`, `CancelAsync` metotlarını sağlayıcı dokümantasyonuna göre uygulayın (belge `EArchiveDocumentKey` ile — referans + fatura tarihi — bulunur). SMS ile imza gerektiren sağlayıcılar `IEArchiveSmsSigningAdapter` uygular. `EArchiveInvoiceRequest.InvoiceId` belge UUID'si (ETTN) olarak kullanılabilir; böylece tekrar denemelerde mükerrer belge oluşmaz.
 2. `Infrastructure/DependencyInjection.cs` içinde `services.AddEArchiveProvider<UyumsoftEArchiveAdapter>();` ekleyin.
 3. `EArchive__Provider=Uyumsoft` ve kimlik bilgilerini environment variable olarak verin.
 

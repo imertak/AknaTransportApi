@@ -45,11 +45,50 @@ public sealed class InvoicesController(IInvoiceService invoiceService) : ApiCont
         var message = invoice.Status switch
         {
             Domain.Enums.InvoiceStatus.Issued => "Fatura kesildi; müşteriye e-posta gönderimi kuyruğa alındı.",
+            Domain.Enums.InvoiceStatus.Pending when invoice.RequiresSmsSignature =>
+                "Fatura GİB e-Arşiv portalında taslak olarak oluşturuldu. Kesilmesi için SMS koduyla imzalayın.",
             Domain.Enums.InvoiceStatus.Pending => "Fatura sağlayıcıya iletildi, sonuç bekleniyor.",
             _ => $"Fatura kesilemedi: {invoice.LastError}",
         };
         return Success(invoice, message);
     }
+
+    /// <summary>GİB portalındaki taslak için imza SMS'ini yetkilinin kayıtlı telefonuna gönderir.</summary>
+    [HttpPost("{id:guid}/earchive/sms")]
+    public async Task<ActionResult<BaseResponse<EArchiveSmsChallengeDto>>> SendSignSms(Guid id, CancellationToken ct)
+    {
+        var challenge = await invoiceService.SendSignSmsAsync(id, ct);
+        return Success(challenge, challenge.MaskedPhone is null ? "SMS kodu gönderildi." : $"SMS kodu {challenge.MaskedPhone} numarasına gönderildi.");
+    }
+
+    /// <summary>SMS kodunu doğrular ve faturayı imzalar. GİB imzayı onaylamazsa fatura kesilmiş sayılmaz.</summary>
+    [HttpPost("{id:guid}/earchive/sign")]
+    public async Task<ActionResult<BaseResponse<InvoiceDetailDto>>> Sign(Guid id, SignInvoiceRequest request, CancellationToken ct)
+    {
+        var invoice = await invoiceService.SignAsync(id, request, ct);
+        return Success(invoice, invoice.Status == Domain.Enums.InvoiceStatus.Issued
+            ? "Fatura imzalandı ve kesildi; müşteriye e-posta gönderimi kuyruğa alındı."
+            : $"Fatura kesilemedi: {invoice.LastError}");
+    }
+
+    /// <summary>GİB portalındaki imzalanmamış taslağı siler; fatura yeniden düzenlenebilir taslak olur.</summary>
+    [HttpPost("{id:guid}/earchive/discard")]
+    public async Task<ActionResult<BaseResponse<InvoiceDetailDto>>> DiscardEArchiveDraft(Guid id, CancellationToken ct) =>
+        Success(await invoiceService.DiscardEArchiveDraftAsync(id, ct), "Portal taslağı silindi; fatura yeniden taslak.");
+
+    /// <summary>Sağlayıcının belge görüntüsü (GİB portalı HTML).</summary>
+    [HttpGet("{id:guid}/earchive/view")]
+    [Produces("text/html", "application/json")]
+    public async Task<IActionResult> EArchiveView(Guid id, CancellationToken ct)
+    {
+        var file = await invoiceService.GetEArchiveViewAsync(id, ct);
+        return File(file.Content, file.ContentType);
+    }
+
+    /// <summary>KDV tevkifat kodları (ör. 624 Yük taşımacılığı 2/10).</summary>
+    [HttpGet("withholding-types")]
+    public ActionResult<BaseResponse<IReadOnlyList<WithholdingTypeDto>>> WithholdingTypes() =>
+        Success(invoiceService.GetWithholdingTypes());
 
     [HttpPost("{id:guid}/cancel")]
     public async Task<ActionResult<BaseResponse<InvoiceDetailDto>>> Cancel(Guid id, [FromBody] CancelInvoiceRequest? request, CancellationToken ct) =>

@@ -67,9 +67,45 @@ public sealed class InvoiceService(
             .FirstOrDefaultAsync(ct);
 
         var i = header.Invoice;
+        var withholding = WithholdingTypes.Find(i.WithholdingCode);
+        var requiresSms = i.Status == InvoiceStatus.Pending && i.EArchiveReference is not null && eArchive.IsConfigured && eArchive.SupportsSmsSigning;
         return new InvoiceDetailDto(i.Id, i.InvoiceNumber, i.CustomerId, header.CustomerName, header.CustomerEmail, i.InvoiceDate, i.SubTotal, i.VatRate,
             i.VatAmount, i.GrandTotal, i.Currency, i.Status, i.Status == InvoiceStatus.Issued, i.Notes, i.EArchiveProvider, i.EArchiveReference,
-            i.EArchiveInvoiceNumber, i.EArchiveInvoiceUrl, i.LastError, i.CreatedByUserId, i.IssuedAt, i.CancelledAt, i.CreatedAt, i.UpdatedAt, items, email);
+            i.EArchiveInvoiceNumber, i.EArchiveInvoiceUrl, i.LastError, i.CreatedByUserId, i.IssuedAt, i.CancelledAt, i.CreatedAt, i.UpdatedAt, items, email,
+            i.WithholdingCode, withholding?.Name, i.WithholdingRate, i.WithholdingAmount, i.PayableAmount, i.AmountInWordsText,
+            i.Iban is null ? null : Iban.Format(i.Iban), i.Iban is null ? null : appOptions.Value.CompanyBankName.TrimOrNull(), ComposeDocumentNote(i), requiresSms);
+    }
+
+    public IReadOnlyList<WithholdingTypeDto> GetWithholdingTypes() =>
+        WithholdingTypes.All.Select(w => new WithholdingTypeDto(w.Code, w.Rate, w.Fraction, w.Name)).ToList();
+
+    /// <summary>
+    /// Faturanın açıklama metni: yazıyla ödenecek tutar, IBAN ve kullanıcı notu. e-Arşiv'de "not" alanına,
+    /// PDF'te açıklama bölümüne yazılır.
+    /// </summary>
+    private string ComposeDocumentNote(Invoice invoice)
+    {
+        var lines = new List<string> { invoice.AmountInWordsText };
+        if (WithholdingTypes.Find(invoice.WithholdingCode) is { } w)
+            lines.Add($"KDV tevkifatı: {w.Code} {w.Name} ({w.Fraction}) {invoice.WithholdingAmount.ToString("N2", System.Globalization.CultureInfo.GetCultureInfo("tr-TR"))} {invoice.Currency}");
+        if (invoice.Iban is { } iban)
+        {
+            var bank = appOptions.Value.CompanyBankName.TrimOrNull();
+            lines.Add(bank is null ? $"IBAN: {Iban.Format(iban)}" : $"IBAN: {Iban.Format(iban)} ({bank})");
+        }
+        if (invoice.Notes.TrimOrNull() is { } notes) lines.Add(notes);
+        return string.Join("\n", lines);
+    }
+
+    private WithholdingType? ResolveWithholding(string? code) => WithholdingTypes.Find(code)
+        ?? (string.IsNullOrWhiteSpace(code) ? null : throw new BusinessValidationException("Geçersiz tevkifat kodu."));
+
+    private string? ResolveIban(string? requested)
+    {
+        var iban = Iban.Normalize(requested) ?? Iban.Normalize(appOptions.Value.CompanyIban);
+        if (iban is not null && !Iban.IsValid(iban))
+            throw new BusinessValidationException(requested is null ? "App:CompanyIban ayarındaki IBAN geçersiz." : "IBAN geçersiz.");
+        return iban;
     }
 
     public async Task<IReadOnlyList<JobDto>> GetJobsAsync(Guid id, CancellationToken ct)
@@ -86,6 +122,8 @@ public sealed class InvoiceService(
         var selected = await LoadInvoiceableJobsAsync(request.JobIds, currentInvoiceId: null, ct);
         var customer = await LoadCustomerForInvoiceAsync(selected[0].CustomerId, ct);
         var invoiceDate = request.InvoiceDate ?? DateOnly.FromDateTime(now);
+        var withholding = request.NoWithholding ? null : ResolveWithholding(request.WithholdingCode ?? appOptions.Value.DefaultWithholdingCode);
+        var iban = ResolveIban(request.Iban);
 
         var invoiceId = await unitOfWork.ExecuteInTransactionAsync(async token =>
         {
@@ -97,9 +135,10 @@ public sealed class InvoiceService(
                 Notes = request.Notes.TrimOrNull(),
                 CreatedByUserId = currentUser.UserId,
                 InvoiceNumber = await numberGenerator.NextInvoiceNumberAsync(invoiceDate, token),
+                Iban = iban,
             };
             foreach (var job in selected) invoice.Items.Add(CreateItem(invoice.Id, job));
-            invoice.Recalculate(request.VatRate ?? appOptions.Value.DefaultVatRate);
+            invoice.Recalculate(request.VatRate ?? appOptions.Value.DefaultVatRate, withholding);
             invoices.Add(invoice);
             await unitOfWork.SaveChangesAsync(token);
             await ClaimJobsAsync(invoice.Id, request.JobIds, now, token);
@@ -120,6 +159,8 @@ public sealed class InvoiceService(
         if (selected.Any(j => j.CustomerId != invoice.CustomerId))
             throw new BusinessValidationException("Faturadaki tüm işler aynı müşteriye ait olmalıdır.");
         await LoadCustomerForInvoiceAsync(invoice.CustomerId, ct);
+        var withholding = ResolveWithholding(request.WithholdingCode);
+        var iban = ResolveIban(request.Iban);
 
         await unitOfWork.ExecuteInTransactionAsync(async token =>
         {
@@ -137,7 +178,8 @@ public sealed class InvoiceService(
             }
             invoice.InvoiceDate = request.InvoiceDate;
             invoice.Notes = request.Notes.TrimOrNull();
-            invoice.Recalculate(request.VatRate);
+            invoice.Iban = iban;
+            invoice.Recalculate(request.VatRate, withholding);
             await unitOfWork.SaveChangesAsync(token);
             await ClaimJobsAsync(invoice.Id, request.JobIds, now, token);
             return true;
@@ -191,7 +233,7 @@ public sealed class InvoiceService(
         if (invoice.Status == InvoiceStatus.Issued)
         {
             if (!eArchive.IsConfigured) throw new IntegrationUnavailableException("e-Arşiv sağlayıcısı yapılandırılmamış; kesilmiş fatura iptal edilemez.");
-            var result = await eArchive.CancelAsync(invoice.EArchiveReference!, request.Reason.TrimOrNull() ?? "İptal", ct);
+            var result = await eArchive.CancelAsync(Key(invoice), request.Reason.TrimOrNull() ?? "İptal", ct);
             if (!result.Success) throw new ConflictException($"e-Arşiv iptali başarısız: {result.ErrorMessage}");
         }
 
@@ -255,12 +297,32 @@ public sealed class InvoiceService(
         }
 
         // Kesilmemiş faturalar için "resmi fatura değildir" ibareli önizleme üretilir.
-        var lines = await invoiceItems.QueryAsNoTracking().Where(x => x.InvoiceId == id).OrderBy(x => x.Job!.JobDate)
-            .Select(x => new DraftInvoiceLine(x.Description, x.Quantity, x.UnitPrice, x.LineTotal)).ToListAsync(ct);
-        var c = invoice.Customer!;
-        var pdf = draftPdf.Generate(new DraftInvoiceDocument(invoice.InvoiceNumber, invoice.InvoiceDate, invoice.Status, c.CompanyName, c.TaxOffice,
-            c.TaxNumber, c.Address, lines, invoice.SubTotal, invoice.VatRate, invoice.VatAmount, invoice.GrandTotal, invoice.Currency, clock.GetUtcNow().UtcDateTime));
+        var pdf = await RenderPdfAsync(invoice, official: false, ct);
         return new FileDownload(pdf, $"TASLAK-{SafeName(invoice.InvoiceNumber)}.pdf");
+    }
+
+    private async Task<byte[]> RenderPdfAsync(Invoice invoice, bool official, CancellationToken ct)
+    {
+        var customer = invoice.Customer ?? await customers.QueryAsNoTracking().FirstAsync(c => c.Id == invoice.CustomerId, ct);
+        var lines = await invoiceItems.QueryAsNoTracking().Where(x => x.InvoiceId == invoice.Id).OrderBy(x => x.Job!.JobDate)
+            .Select(x => new DraftInvoiceLine(x.Description, x.Quantity, x.UnitPrice, x.LineTotal)).ToListAsync(ct);
+        var withholding = WithholdingTypes.Find(invoice.WithholdingCode);
+        return draftPdf.Generate(new DraftInvoiceDocument(invoice.InvoiceNumber, invoice.InvoiceDate, invoice.Status, customer.CompanyName, customer.TaxOffice,
+            customer.TaxNumber, customer.Address, lines, invoice.SubTotal, invoice.VatRate, invoice.VatAmount, invoice.GrandTotal, invoice.Currency,
+            clock.GetUtcNow().UtcDateTime)
+        {
+            Official = official,
+            EArchiveInvoiceNumber = invoice.EArchiveInvoiceNumber,
+            Ettn = invoice.EArchiveReference,
+            WithholdingLabel = withholding is null ? null : $"KDV Tevkifatı ({withholding.Fraction}, {withholding.Code})",
+            WithholdingAmount = invoice.WithholdingAmount,
+            PayableAmount = invoice.PayableAmount,
+            AmountInWords = invoice.AmountInWordsText,
+            Iban = invoice.Iban is null ? null : Iban.Format(invoice.Iban),
+            BankName = invoice.Iban is null ? null : appOptions.Value.CompanyBankName.TrimOrNull(),
+            Notes = invoice.Notes,
+            CompanyName = appOptions.Value.CompanyName,
+        });
     }
 
     public async Task<byte[]> GetOfficialPdfAsync(Guid id, CancellationToken ct)
@@ -271,8 +333,14 @@ public sealed class InvoiceService(
 
         if (invoice.InvoicePdfPath is { } path && await fileStorage.ReadAsync(path, ct) is { } cached) return cached;
 
-        if (!eArchive.IsConfigured) throw new IntegrationUnavailableException("e-Arşiv sağlayıcısı yapılandırılmamış; resmi PDF alınamıyor.");
-        var pdf = await eArchive.GetPdfAsync(invoice.EArchiveReference, ct);
+        // GİB portalı PDF vermez: kesilmiş faturanın bilgileri (GİB numarası, ETTN) ile e-Arşiv fatura PDF'i üretilir.
+        // Resmi görüntü /earchive/view ile portaldan alınabilir.
+        if (!eArchive.IsConfigured || !eArchive.SupportsPdf)
+        {
+            if (invoice.EArchiveProvider is null) throw new IntegrationUnavailableException("e-Arşiv sağlayıcısı yapılandırılmamış; resmi PDF alınamıyor.");
+            return await RenderPdfAsync(invoice, official: true, ct);
+        }
+        var pdf = await eArchive.GetPdfAsync(Key(invoice), ct);
         if (pdf.Length == 0) throw new IntegrationUnavailableException("e-Arşiv sağlayıcısı boş PDF döndürdü.");
         invoice.InvoicePdfPath = await fileStorage.SaveAsync("invoices", $"{invoice.Id:N}.pdf", pdf, ct);
         await unitOfWork.SaveChangesAsync(ct);
@@ -323,7 +391,7 @@ public sealed class InvoiceService(
         {
             try
             {
-                var status = await eArchive.GetStatusAsync(invoice.EArchiveReference!, ct);
+                var status = await eArchive.GetStatusAsync(Key(invoice), ct);
                 var customer = await customers.QueryAsNoTracking().FirstAsync(c => c.Id == invoice.CustomerId, ct);
                 var before = invoice.Status;
                 await ApplySendResultAsync(invoice, customer,
@@ -366,6 +434,72 @@ public sealed class InvoiceService(
         }
         return Task.CompletedTask;
     }
+
+    public async Task<EArchiveSmsChallengeDto> SendSignSmsAsync(Guid id, CancellationToken ct)
+    {
+        var invoice = await LoadPendingPortalInvoiceAsync(id, ct);
+        var challenge = await eArchive.StartSmsSigningAsync(Key(invoice), ct);
+        logger.LogInformation("e-Arşiv imza SMS'i gönderildi. InvoiceId: {InvoiceId}", id);
+        return new EArchiveSmsChallengeDto(challenge.OperationId, challenge.MaskedPhone);
+    }
+
+    public async Task<InvoiceDetailDto> SignAsync(Guid id, SignInvoiceRequest request, CancellationToken ct)
+    {
+        var invoice = await LoadPendingPortalInvoiceAsync(id, ct);
+        var customer = await LoadCustomerForInvoiceAsync(invoice.CustomerId, ct);
+        var result = await eArchive.CompleteSmsSigningAsync(Key(invoice), request.OperationId.Trim(), request.Code.Trim(), ct);
+
+        switch (result.Status)
+        {
+            case EArchiveDocumentStatus.Issued:
+                await ApplySendResultAsync(invoice, customer,
+                    new EArchiveSendResult(true, EArchiveDocumentStatus.Issued, invoice.EArchiveReference, result.InvoiceNumber, result.InvoiceUrl, null));
+                await unitOfWork.SaveChangesAsync(CancellationToken.None);
+                return await GetAsync(id, CancellationToken.None);
+            case EArchiveDocumentStatus.Rejected or EArchiveDocumentStatus.Cancelled:
+                invoice.MarkFailed(result.ErrorMessage ?? "e-Arşiv taslağı portalda bulunamadı.");
+                await unitOfWork.SaveChangesAsync(CancellationToken.None);
+                return await GetAsync(id, CancellationToken.None);
+            default:
+                // İmza tamamlanmadı: fatura bekler durumda kalır, kesildi olarak işaretlenmez.
+                throw new BusinessValidationException(result.ErrorMessage ?? "Fatura imzalanamadı.", [new ErrorDetail("code", result.ErrorMessage ?? "Fatura imzalanamadı.")]);
+        }
+    }
+
+    public async Task<InvoiceDetailDto> DiscardEArchiveDraftAsync(Guid id, CancellationToken ct)
+    {
+        var invoice = await LoadPendingPortalInvoiceAsync(id, ct);
+        var result = await eArchive.DiscardDraftAsync(Key(invoice), "AKNA: taslak geri alındı", ct);
+        if (!result.Success) throw new ConflictException(result.ErrorMessage ?? "Portal taslağı silinemedi.");
+        invoice.RevertToDraft();
+        await unitOfWork.SaveChangesAsync(CancellationToken.None);
+        logger.LogInformation("e-Arşiv portal taslağı silindi, fatura taslağa döndü. InvoiceId: {InvoiceId}", id);
+        return await GetAsync(id, CancellationToken.None);
+    }
+
+    public async Task<FileDownload> GetEArchiveViewAsync(Guid id, CancellationToken ct)
+    {
+        var invoice = await invoices.QueryAsNoTracking().FirstOrDefaultAsync(i => i.Id == id, ct) ?? throw NotFoundException.For("Fatura");
+        if (invoice.EArchiveReference is null || invoice.Status is not (InvoiceStatus.Pending or InvoiceStatus.Issued))
+            throw new ConflictException("Bu fatura için e-Arşiv belgesi yok.");
+        if (!eArchive.IsConfigured) throw new IntegrationUnavailableException("e-Arşiv sağlayıcısı yapılandırılmamış.");
+        var html = await eArchive.GetHtmlAsync(Key(invoice), signed: invoice.Status == InvoiceStatus.Issued, ct)
+                   ?? throw new IntegrationUnavailableException($"{eArchive.ProviderName} belge görüntüsü sağlamıyor; PDF'i kullanın.");
+        return new FileDownload(System.Text.Encoding.UTF8.GetBytes(html), $"e-Arsiv-{SafeName(invoice.EArchiveInvoiceNumber ?? invoice.InvoiceNumber)}.html", "text/html; charset=utf-8");
+    }
+
+    private async Task<Invoice> LoadPendingPortalInvoiceAsync(Guid id, CancellationToken ct)
+    {
+        if (!eArchive.IsConfigured) throw new IntegrationUnavailableException("e-Arşiv sağlayıcısı yapılandırılmamış.");
+        if (!eArchive.SupportsSmsSigning) throw new ConflictException($"{eArchive.ProviderName} sağlayıcısı SMS ile imza kullanmıyor.");
+        var invoice = await invoices.Query().FirstOrDefaultAsync(i => i.Id == id, ct) ?? throw NotFoundException.For("Fatura");
+        if (invoice.Status != InvoiceStatus.Pending || invoice.EArchiveReference is null)
+            throw new ConflictException("Fatura imza bekleyen bir e-Arşiv taslağı değil.");
+        return invoice;
+    }
+
+    private static EArchiveDocumentKey Key(Invoice invoice) =>
+        new(invoice.EArchiveReference ?? throw new InvalidInvoiceStateException("e-Arşiv referansı yok."), invoice.InvoiceDate);
 
     private void EnqueueInvoiceEmail(Invoice invoice, Customer customer, DateTime now)
     {
@@ -444,7 +578,11 @@ public sealed class InvoiceService(
         invoice.SubTotal,
         invoice.VatAmount,
         invoice.GrandTotal,
-        invoice.Notes);
+        ComposeDocumentNote(invoice),
+        invoice.WithholdingCode,
+        invoice.WithholdingRate,
+        invoice.WithholdingAmount,
+        invoice.PayableAmount);
 
     private static string Truncate(string value, int max) => value.Length <= max ? value : value[..max];
 

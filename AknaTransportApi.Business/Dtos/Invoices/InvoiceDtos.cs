@@ -25,7 +25,10 @@ public sealed record InvoiceListItemDto(
     Guid? FirstJobId,
     string? FirstJobNumber,
     string? Description,
-    string? CustomerEmail);
+    string? CustomerEmail,
+    string? WithholdingCode,
+    decimal WithholdingAmount,
+    decimal PayableAmount);
 
 public sealed record InvoiceItemDto(
     Guid Id,
@@ -67,7 +70,31 @@ public sealed record InvoiceDetailDto(
     DateTime CreatedAt,
     DateTime? UpdatedAt,
     IReadOnlyList<InvoiceItemDto> Items,
-    InvoiceEmailDto? Email);
+    InvoiceEmailDto? Email,
+    // Tevkifat (kod boşsa yok). Oran KDV'nin yüzdesidir: 2/10 → 20.
+    string? WithholdingCode,
+    string? WithholdingName,
+    decimal WithholdingRate,
+    decimal WithholdingAmount,
+    decimal PayableAmount,
+    /// "YALNIZ: ... TÜRK LİRASI ..." (ödenecek tutarın yazıyla gösterimi).
+    string AmountInWords,
+    string? Iban,
+    string? BankName,
+    /// Faturada/e-Arşiv notunda yer alan tam açıklama (yazıyla tutar + IBAN + not).
+    string DocumentNote,
+    /// true: fatura sağlayıcıda taslak olarak bekliyor, SMS koduyla imzalanması gerekiyor (GİB portalı).
+    bool RequiresSmsSignature);
+
+public sealed record WithholdingTypeDto(string Code, int Rate, string Fraction, string Name);
+
+public sealed record EArchiveSmsChallengeDto(string OperationId, string? MaskedPhone);
+
+public sealed class SignInvoiceRequest
+{
+    public string OperationId { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+}
 
 public sealed class CreateInvoiceRequest
 {
@@ -78,6 +105,12 @@ public sealed class CreateInvoiceRequest
     /// <summary>Boş bırakılırsa varsayılan KDV oranı (%20) kullanılır.</summary>
     public decimal? VatRate { get; set; }
     public string? Notes { get; set; }
+    /// <summary>KDV tevkifat kodu (ör. "624"). Boş: tevkifat yok. Gönderilmezse App:DefaultWithholdingCode kullanılır.</summary>
+    public string? WithholdingCode { get; set; }
+    /// <summary>true ise tevkifat uygulanmaz (varsayılan kod tanımlı olsa bile).</summary>
+    public bool NoWithholding { get; set; }
+    /// <summary>Faturada yazılacak IBAN. Boşsa App:CompanyIban kullanılır.</summary>
+    public string? Iban { get; set; }
 }
 
 public sealed class UpdateInvoiceRequest
@@ -86,6 +119,10 @@ public sealed class UpdateInvoiceRequest
     public DateOnly InvoiceDate { get; set; }
     public decimal VatRate { get; set; }
     public string? Notes { get; set; }
+    /// <summary>KDV tevkifat kodu. Boş: tevkifat yok.</summary>
+    public string? WithholdingCode { get; set; }
+    /// <summary>Faturada yazılacak IBAN. Boşsa App:CompanyIban kullanılır.</summary>
+    public string? Iban { get; set; }
 }
 
 public sealed class CancelInvoiceRequest

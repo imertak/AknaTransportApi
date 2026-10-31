@@ -15,6 +15,15 @@ public class Invoice : Entity, IHasTimestamps
     public decimal VatRate { get; private set; }
     public decimal VatAmount { get; private set; }
     public decimal GrandTotal { get; private set; }
+    /// <summary>KDV tevkifat kodu (ör. 624 Yük taşımacılığı). Boşsa tevkifat yoktur.</summary>
+    public string? WithholdingCode { get; private set; }
+    /// <summary>KDV'nin alıcı tarafından kesilen yüzdesi (2/10 → 20).</summary>
+    public decimal WithholdingRate { get; private set; }
+    public decimal WithholdingAmount { get; private set; }
+    /// <summary>Alıcının ödeyeceği tutar: genel toplam − tevkifat.</summary>
+    public decimal PayableAmount { get; private set; }
+    /// <summary>Faturada yazılan IBAN (oluşturma anındaki değer korunur).</summary>
+    public string? Iban { get; set; }
     public string Currency { get; set; } = Money.DefaultCurrency;
     public InvoiceStatus Status { get; private set; } = InvoiceStatus.Draft;
     public string? Notes { get; set; }
@@ -41,9 +50,10 @@ public class Invoice : Entity, IHasTimestamps
 
     public bool IsEditable => Status is InvoiceStatus.Draft or InvoiceStatus.Failed;
 
-    /// <summary>Kalemlerden ara toplam, KDV ve genel toplamı yeniden hesaplar.</summary>
-    public void Recalculate(decimal vatRate)
+    /// <summary>Kalemlerden ara toplam, KDV, tevkifat ve ödenecek tutarı yeniden hesaplar.</summary>
+    public void Recalculate(decimal vatRate, WithholdingType? withholding = null)
     {
+        if (withholding is not null && vatRate <= 0) throw new DomainException("KDV oranı 0 olan faturada tevkifat uygulanamaz.");
         if (vatRate is < 0 or > 100) throw new DomainException("KDV oranı 0 ile 100 arasında olmalıdır.");
         VatRate = vatRate;
         foreach (var item in Items)
@@ -54,8 +64,15 @@ public class Invoice : Entity, IHasTimestamps
         SubTotal = Money.Round(Items.Sum(i => i.LineTotal));
         VatAmount = Money.CalculateVat(SubTotal, vatRate);
         GrandTotal = SubTotal + VatAmount;
+        WithholdingCode = withholding?.Code;
+        WithholdingRate = withholding?.Rate ?? 0;
+        WithholdingAmount = withholding is null ? 0 : Money.Round(VatAmount * withholding.Rate / 100m);
+        PayableAmount = GrandTotal - WithholdingAmount;
         Touch();
     }
+
+    /// <summary>Faturanın "Yalnız ..." satırı (ödenecek tutarın yazıyla gösterimi).</summary>
+    public string AmountInWordsText => AmountInWords.Write(PayableAmount, Currency);
 
     public void EnsureEditable()
     {
@@ -88,6 +105,21 @@ public class Invoice : Entity, IHasTimestamps
         SetProviderReference(reference, invoiceNumber, url);
         IssuedAt = now;
         LastError = null;
+    }
+
+    /// <summary>
+    /// Sağlayıcıdaki imzalanmamış taslak silindiğinde fatura yeniden düzenlenebilir taslağa döner.
+    /// Kesilmiş (imzalı) faturaya uygulanamaz.
+    /// </summary>
+    public void RevertToDraft()
+    {
+        if (Status != InvoiceStatus.Pending) throw new InvalidInvoiceStateException("Yalnızca sağlayıcıda bekleyen fatura taslağa döndürülebilir.");
+        Status = InvoiceStatus.Draft;
+        EArchiveReference = null;
+        EArchiveInvoiceNumber = null;
+        EArchiveInvoiceUrl = null;
+        LastError = null;
+        Touch();
     }
 
     public void MarkFailed(string error)

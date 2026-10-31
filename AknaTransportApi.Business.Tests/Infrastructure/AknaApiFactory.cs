@@ -27,10 +27,18 @@ public class AknaApiFactory : WebApplicationFactory<Program>
     /// <summary>false ise e-Arşiv sağlayıcısı yapılandırılmamış kabul edilir.</summary>
     protected virtual bool EArchiveConfigured => true;
 
+    /// <summary>Kullanılacak e-Arşiv adaptörünün adı.</summary>
+    protected virtual string EArchiveProvider => FakeEArchiveAdapter.ProviderName;
+
+    /// <summary>Alt sınıfların eklediği ek ayarlar.</summary>
+    protected virtual IDictionary<string, string?> ExtraSettings => new Dictionary<string, string?>();
+
+    protected virtual void ConfigureExtraServices(IServiceCollection services) { }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
-        builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+        builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>(ExtraSettings)
         {
             ["ConnectionStrings:DefaultConnection"] = "Host=unused",
             ["Jwt:Secret"] = "test-secret-0123456789-abcdefghijklmnopqrstuvwxyz",
@@ -39,7 +47,7 @@ public class AknaApiFactory : WebApplicationFactory<Program>
             ["Seed:DemoData"] = "false",
             ["Database:ApplyMigrationsOnStartup"] = "false",
             ["BackgroundJobs:Enabled"] = "false",
-            ["EArchive:Provider"] = EArchiveConfigured ? FakeEArchiveAdapter.ProviderName : "",
+            ["EArchive:Provider"] = EArchiveConfigured ? EArchiveProvider : "",
             ["Storage:RootPath"] = Path.Combine(Path.GetTempPath(), "akna-tests", Guid.NewGuid().ToString("N")),
             ["RateLimiting:GlobalPerMinute"] = "100000",
             ["RateLimiting:AuthPerMinute"] = "100000",
@@ -59,6 +67,7 @@ public class AknaApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<IEmailService>();
             services.AddSingleton<IEmailService>(Email);
             services.AddSingleton<IEArchiveProviderAdapter>(EArchive);
+            ConfigureExtraServices(services);
         });
     }
 
