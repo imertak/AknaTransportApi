@@ -13,7 +13,8 @@ public static class JobMappings
         j.InvoiceId, j.Invoice != null ? j.Invoice.InvoiceNumber : null,
         j.StartedAt, j.CompletedAt, j.CancelledAt, j.CreatedAt, j.UpdatedAt,
         j.RouteDescription,
-        j.Stops.OrderBy(s => s.StopType).ThenBy(s => s.Sequence)
+        // StopType veritabanında metin olarak tutulur; alfabetik sıralama "Delivery"yi öne alacağı için açıkça sıralanır.
+        j.Stops.OrderBy(s => s.StopType == StopType.Pickup ? 0 : 1).ThenBy(s => s.Sequence)
             .Select(s => new JobStopDto(s.Id, s.StopType, s.Sequence, s.Address, s.Latitude, s.Longitude, s.Description)).ToList(),
         j.AssignedVehicleId,
         j.AssignedVehicle != null ? j.AssignedVehicle.PlateNumber : null,

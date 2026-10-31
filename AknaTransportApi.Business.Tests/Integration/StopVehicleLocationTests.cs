@@ -42,6 +42,10 @@ public class StopVehicleLocationTests(AknaApiFactory factory) : IClassFixture<Ak
         Assert.Equal(["İstanbul / Ümraniye", "İstanbul / İkitelli", "İstanbul / Gebze"],
             job.Stops.Where(s => s.StopType == StopType.Pickup).OrderBy(s => s.Sequence).Select(s => s.Address));
         Assert.Equal([1, 2], job.Stops.Where(s => s.StopType == StopType.Delivery).Select(s => s.Sequence));
+        // API sırası: önce tüm yükleme noktaları, sonra teslimat noktaları.
+        Assert.Equal(
+            [(StopType.Pickup, 1), (StopType.Pickup, 2), (StopType.Pickup, 3), (StopType.Delivery, 1), (StopType.Delivery, 2)],
+            job.Stops.Select(s => (s.StopType, s.Sequence)));
         Assert.Equal("İstanbul / Ümraniye", job.PickupAddress);
         Assert.Equal("İstanbul / Haliç Tersane", job.DeliveryAddress);
         Assert.Equal(41.0383, job.DeliveryLatitude);
