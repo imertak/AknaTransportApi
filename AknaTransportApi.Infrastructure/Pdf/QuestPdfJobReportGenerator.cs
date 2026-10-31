@@ -1,11 +1,8 @@
-using AknaTransport.Business.Abstractions;
-using AknaTransport.Business.Features.Dashboard;
-using AknaTransport.Business.Features.Jobs;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 
-namespace AknaTransport.Infrastructure.Pdf;
+namespace AknaTransportApi.Infrastructure.Pdf;
 
 /// <summary>
 /// "AKNA TRANSPORT — NAKLİYE İŞLERİ DÖKÜMÜ" raporu. A4 yatay, siyah-beyaz, başlık ve tablo

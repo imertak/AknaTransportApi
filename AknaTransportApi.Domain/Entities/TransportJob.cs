@@ -1,8 +1,5 @@
-using AknaTransport.Domain.Common;
-using AknaTransport.Domain.Enums;
-using AknaTransport.Domain.Exceptions;
 
-namespace AknaTransport.Domain.Entities;
+namespace AknaTransportApi.Domain.Entities;
 
 /// <summary>
 /// Nakliye işi. Durum geçişleri yalnızca bu sınıftaki metotlarla yapılır;
@@ -10,8 +7,14 @@ namespace AknaTransport.Domain.Entities;
 /// </summary>
 public class TransportJob : Entity, IHasTimestamps
 {
-    /// <summary>Konum paylaşımının kabul edildiği (araç hareket halinde) durumlar.</summary>
-    public static readonly IReadOnlyList<JobStatus> TrackableStatuses = [JobStatus.OnTheWay, JobStatus.Loading, JobStatus.Delivering];
+    /// <summary>
+    /// Konum paylaşımının kabul edildiği durumlar. Takip, şoför işi kabul ettiği anda başlar ve
+    /// iş tamamlanana veya iptal edilene kadar sürer.
+    /// </summary>
+    public static readonly IReadOnlyList<JobStatus> TrackableStatuses = [JobStatus.Accepted, JobStatus.OnTheWay, JobStatus.Loading, JobStatus.Delivering];
+
+    public const int RouteDescriptionMaxLength = 2000;
+    public const string RouteSeparator = " - ";
 
     /// <summary>Şoförün sahada yürüttüğü durumlar.</summary>
     public static readonly IReadOnlyList<JobStatus> InProgressStatuses = [JobStatus.Accepted, JobStatus.OnTheWay, JobStatus.Loading, JobStatus.Delivering];
@@ -27,15 +30,29 @@ public class TransportJob : Entity, IHasTimestamps
     public Guid? AssignedDriverId { get; set; }
     public User? AssignedDriver { get; set; }
 
+    /// <summary>İşte kullanılacak araç. Yalnızca atanan şoförün aktif araçlarından biri olabilir.</summary>
+    public Guid? AssignedVehicleId { get; private set; }
+    public Vehicle? AssignedVehicle { get; set; }
+
     public DateOnly JobDate { get; set; }
     public string StoreName { get; set; } = string.Empty;
     public VehicleType VehicleType { get; set; }
-    public string PickupAddress { get; set; } = string.Empty;
-    public string DeliveryAddress { get; set; } = string.Empty;
-    public double? PickupLatitude { get; set; }
-    public double? PickupLongitude { get; set; }
-    public double? DeliveryLatitude { get; set; }
-    public double? DeliveryLongitude { get; set; }
+    /// <summary>İlk yükleme noktası (liste, arama ve harita için özet). Duraklardan otomatik doldurulur.</summary>
+    public string PickupAddress { get; private set; } = string.Empty;
+    /// <summary>Son teslimat noktası (liste, arama ve müşteri takibi için özet). Duraklardan otomatik doldurulur.</summary>
+    public string DeliveryAddress { get; private set; } = string.Empty;
+    public double? PickupLatitude { get; private set; }
+    public double? PickupLongitude { get; private set; }
+    public double? DeliveryLatitude { get; private set; }
+    public double? DeliveryLongitude { get; private set; }
+
+    /// <summary>
+    /// Duraklardan otomatik üretilen güzergâh metni: önce tüm yükleme, sonra tüm teslimat noktaları
+    /// ("İstanbul / Ümraniye - İstanbul / İkitelli - İstanbul / Zorlu AVM"). Duraklar değişince yeniden üretilir.
+    /// </summary>
+    public string RouteDescription { get; private set; } = string.Empty;
+
+    /// <summary>Kullanıcının elle yazdığı açıklama. Durak değişikliklerinden etkilenmez.</summary>
     public string Description { get; set; } = string.Empty;
     public decimal Price { get; set; }
     public string Currency { get; set; } = Money.DefaultCurrency;
@@ -58,35 +75,52 @@ public class TransportJob : Entity, IHasTimestamps
 
     public ICollection<JobStatusHistory> StatusHistory { get; set; } = new List<JobStatusHistory>();
 
+    /// <summary>Yükleme ve teslimat noktaları. Yalnızca <see cref="SetStops"/> ile değiştirilir.</summary>
+    public ICollection<TransportJobStop> Stops { get; set; } = new List<TransportJobStop>();
+
     public bool IsClosed => Status is JobStatus.Completed or JobStatus.Cancelled;
     public bool IsTrackable => TrackableStatuses.Contains(Status);
 
     /// <summary>Yeni iş oluşturur ve ilk durum kaydını ekler.</summary>
-    public void Initialize(Guid actorId, Guid? driverId, DateTime now)
+    public void Initialize(Guid actorId, Guid? driverId, DateTime now, Guid? vehicleId = null)
     {
+        if (driverId is null && vehicleId is not null) throw new DomainException("Araç seçmek için önce şoför seçilmelidir.");
         Status = driverId is null ? JobStatus.Pending : JobStatus.Assigned;
         AssignedDriverId = driverId;
+        AssignedVehicleId = vehicleId;
         Record(null, Status, actorId, now, driverId is null ? "İş oluşturuldu." : "İş oluşturuldu ve şoföre atandı.");
     }
 
     /// <summary>Şoför atar veya atamayı kaldırır (driverId null). İş başladıktan sonra atama değişmez.</summary>
-    public void AssignDriver(Guid? driverId, Guid actorId, DateTime now, string? note = null)
+    public void AssignDriver(Guid? driverId, Guid actorId, DateTime now, string? note = null, Guid? vehicleId = null)
     {
         EnsureIn(AssignableStatuses, "şoför atama");
-        if (driverId == AssignedDriverId && Status != JobStatus.Pending) return;
+        if (driverId is null && vehicleId is not null) throw new DomainException("Araç seçmek için önce şoför seçilmelidir.");
+        if (driverId == AssignedDriverId && Status != JobStatus.Pending)
+        {
+            // Aynı şoför: yalnızca araç değişmiş olabilir; durum geçmişine kayıt düşülmez.
+            if (vehicleId != AssignedVehicleId)
+            {
+                AssignedVehicleId = vehicleId;
+                ConcurrencyStamp = Guid.NewGuid();
+            }
+            return;
+        }
 
         var from = Status;
         AssignedDriverId = driverId;
+        AssignedVehicleId = vehicleId;
         Status = driverId is null ? JobStatus.Pending : JobStatus.Assigned;
         Record(from, Status, actorId, now, note ?? (driverId is null ? "Şoför ataması kaldırıldı." : "Şoför atandı."));
     }
 
     /// <summary>Admin işi kendi üzerine alır; iş kabul edilmiş sayılır.</summary>
-    public void ClaimBy(Guid adminId, DateTime now, string? note = null)
+    public void ClaimBy(Guid adminId, DateTime now, string? note = null, Guid? vehicleId = null)
     {
         EnsureIn(AssignableStatuses, "üstlenme");
         var from = Status;
         AssignedDriverId = adminId;
+        AssignedVehicleId = vehicleId;
         Status = JobStatus.Accepted;
         Record(from, Status, adminId, now, note ?? "İş yönetici tarafından üstlenildi.");
     }
@@ -122,6 +156,60 @@ public class TransportJob : Entity, IHasTimestamps
         CancellationReason = reason;
         Record(from, Status, actorId, now, string.IsNullOrWhiteSpace(reason) ? "İş iptal edildi." : $"İş iptal edildi: {reason}");
     }
+
+    /// <summary>
+    /// Yükleme ve teslimat noktalarını verilen sırayla yeniden yazar; özet adres alanlarını ve
+    /// otomatik güzergâh açıklamasını günceller. Elle yazılan <see cref="Description"/> değişmez.
+    /// </summary>
+    public void SetStops(IReadOnlyList<JobStopInput> stops, DateTime now)
+    {
+        var pickups = stops.Where(s => s.StopType == StopType.Pickup).ToList();
+        var deliveries = stops.Where(s => s.StopType == StopType.Delivery).ToList();
+        if (pickups.Count == 0) throw new DomainException("En az bir yükleme adresi girilmelidir.");
+        if (deliveries.Count == 0) throw new DomainException("En az bir teslimat adresi girilmelidir.");
+        if (stops.Any(s => string.IsNullOrWhiteSpace(s.Address))) throw new DomainException("Durak adresi boş olamaz.");
+        if (stops.Any(s => (s.Latitude is null) != (s.Longitude is null)))
+            throw new DomainException("Durak konumu için enlem ve boylam birlikte verilmelidir.");
+
+        Stops.Clear();
+        AddStops(pickups, StopType.Pickup, now);
+        AddStops(deliveries, StopType.Delivery, now);
+
+        var firstPickup = pickups[0];
+        var lastDelivery = deliveries[^1];
+        PickupAddress = Truncate(firstPickup.Address.Trim(), TransportJobStop.AddressMaxLength);
+        PickupLatitude = firstPickup.Latitude;
+        PickupLongitude = firstPickup.Longitude;
+        DeliveryAddress = Truncate(lastDelivery.Address.Trim(), TransportJobStop.AddressMaxLength);
+        DeliveryLatitude = lastDelivery.Latitude;
+        DeliveryLongitude = lastDelivery.Longitude;
+        RouteDescription = BuildRouteDescription(pickups.Concat(deliveries).Select(s => s.Address));
+    }
+
+    /// <summary>Önce yükleme, sonra teslimat adreslerini " - " ile birleştirir.</summary>
+    public static string BuildRouteDescription(IEnumerable<string> orderedAddresses) =>
+        Truncate(string.Join(RouteSeparator, orderedAddresses.Select(a => a.Trim()).Where(a => a.Length > 0)), RouteDescriptionMaxLength);
+
+    private void AddStops(List<JobStopInput> items, StopType type, DateTime now)
+    {
+        var sequence = 1;
+        foreach (var s in items)
+        {
+            Stops.Add(new TransportJobStop
+            {
+                TransportJobId = Id,
+                StopType = type,
+                Address = Truncate(s.Address.Trim(), TransportJobStop.AddressMaxLength),
+                Latitude = s.Latitude,
+                Longitude = s.Longitude,
+                Sequence = sequence++,
+                Description = string.IsNullOrWhiteSpace(s.Description) ? null : s.Description.Trim(),
+                CreatedAt = now,
+            });
+        }
+    }
+
+    private static string Truncate(string value, int max) => value.Length <= max ? value : value[..max];
 
     /// <summary>İş detayları (adres, fiyat vb.) değiştirilebilir mi?</summary>
     public void EnsureEditable()

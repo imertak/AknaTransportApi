@@ -1,6 +1,5 @@
-using AknaTransport.Domain.Enums;
 
-namespace AknaTransport.Business.Common;
+namespace AknaTransportApi.Business.Common;
 
 /// <summary>İsteği yapan kullanıcının JWT'den okunan bilgileri.</summary>
 public interface ICurrentUser

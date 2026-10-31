@@ -1,10 +1,9 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
-using AknaTransport.Business.Abstractions;
 using Microsoft.Extensions.Options;
 
-namespace AknaTransport.Infrastructure.EArchive;
+namespace AknaTransportApi.Infrastructure.EArchive;
 
 /// <summary>
 /// HTTP/JSON tabanlı e-Arşiv entegratörleri için temel sınıf. Kimlik doğrulama, zaman aşımı ve

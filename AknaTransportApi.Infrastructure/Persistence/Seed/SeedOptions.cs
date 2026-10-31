@@ -1,4 +1,4 @@
-namespace AknaTransport.Infrastructure.Persistence.Seed;
+namespace AknaTransportApi.Infrastructure.Persistence.Seed;
 
 /// <summary>
 /// Seed ayarları. Şifreler kaynak kodda tutulmaz; environment variable veya User Secrets ile verilir:

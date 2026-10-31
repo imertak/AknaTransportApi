@@ -1,4 +1,4 @@
-namespace AknaTransport.Domain.Common;
+namespace AknaTransportApi.Domain.Common;
 
 /// <summary>Para hesaplamaları için ortak kurallar. Tüm tutarlar decimal tutulur.</summary>
 public static class Money

@@ -1,22 +1,9 @@
-using AknaTransport.Business.Abstractions;
-using AknaTransport.Business.Options;
-using AknaTransport.Domain.Interfaces;
-using AknaTransport.Infrastructure.BackgroundJobs;
-using AknaTransport.Infrastructure.EArchive;
-using AknaTransport.Infrastructure.Email;
-using AknaTransport.Infrastructure.Locations;
-using AknaTransport.Infrastructure.Pdf;
-using AknaTransport.Infrastructure.Persistence;
-using AknaTransport.Infrastructure.Persistence.Seed;
-using AknaTransport.Infrastructure.Security;
-using AknaTransport.Infrastructure.Sms;
-using AknaTransport.Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace AknaTransport.Infrastructure;
+namespace AknaTransportApi.Infrastructure;
 
 public static class DependencyInjection
 {

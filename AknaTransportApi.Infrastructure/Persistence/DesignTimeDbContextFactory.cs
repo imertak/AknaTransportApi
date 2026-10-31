@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
-namespace AknaTransport.Infrastructure.Persistence;
+namespace AknaTransportApi.Infrastructure.Persistence;
 
 /// <summary>
 /// dotnet ef komutları için. Bağlantı dizesi AKNA_DESIGN_CONNECTION environment variable'ından

@@ -1,7 +1,5 @@
-using AknaTransport.Domain.Common;
-using AknaTransport.Domain.Enums;
 
-namespace AknaTransport.Domain.Entities;
+namespace AknaTransportApi.Domain.Entities;
 
 /// <summary>
 /// E-posta gönderim kaydı. Fatura e-postası için fatura başına tek kayıt bulunur

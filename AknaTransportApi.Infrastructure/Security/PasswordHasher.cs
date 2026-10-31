@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
-using AknaTransport.Business.Abstractions;
 
-namespace AknaTransport.Infrastructure.Security;
+namespace AknaTransportApi.Infrastructure.Security;
 
 /// <summary>
 /// PBKDF2-HMAC-SHA256 ile şifre özeti. Biçim: PBKDF2-SHA256$iterasyon$salt$hash (Base64).

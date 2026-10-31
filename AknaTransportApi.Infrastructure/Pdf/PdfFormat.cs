@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace AknaTransport.Infrastructure.Pdf;
+namespace AknaTransportApi.Infrastructure.Pdf;
 
 internal static class PdfFormat
 {

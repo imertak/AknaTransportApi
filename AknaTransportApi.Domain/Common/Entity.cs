@@ -1,4 +1,4 @@
-namespace AknaTransport.Domain.Common;
+namespace AknaTransportApi.Domain.Common;
 
 /// <summary>Tüm varlıkların ortak kimliği. Sıralı (v7) Guid indeks yerleşimini iyileştirir.</summary>
 public abstract class Entity
