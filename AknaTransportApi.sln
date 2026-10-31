@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AknaTransportApi.Domain", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AknaTransportApi.Infrastructure", "AknaTransportApi.Infrastructure\AknaTransportApi.Infrastructure.csproj", "{BFC46D68-6D5F-31EE-F12B-8447E81A85EF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AknaTransport.Api", "AknaTransport.Api\AknaTransport.Api.csproj", "{36667D4F-23BD-5266-D847-37A073AD5C9D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{BFC46D68-6D5F-31EE-F12B-8447E81A85EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BFC46D68-6D5F-31EE-F12B-8447E81A85EF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BFC46D68-6D5F-31EE-F12B-8447E81A85EF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{36667D4F-23BD-5266-D847-37A073AD5C9D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{36667D4F-23BD-5266-D847-37A073AD5C9D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{36667D4F-23BD-5266-D847-37A073AD5C9D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{36667D4F-23BD-5266-D847-37A073AD5C9D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
