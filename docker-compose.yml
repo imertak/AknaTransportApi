@@ -1,0 +1,15 @@
+# Yalnızca yerel geliştirme için PostgreSQL. Üretimde kullanmayın.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: akna-postgres
+    environment:
+      POSTGRES_DB: akna_transport
+      POSTGRES_USER: akna
+      POSTGRES_PASSWORD: akna_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - akna-pgdata:/var/lib/postgresql/data
+volumes:
+  akna-pgdata:

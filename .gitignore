@@ -7,3 +7,8 @@ obj/
 *.log
 .env
 .env.*
+TestResults/
+storage/
+mail-drop/
+*.eml
+appsettings.*.local.json
