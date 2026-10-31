@@ -22,6 +22,9 @@ public interface IInvoiceService
     /// <summary>Faturadaki işlerin dökümü (müşteriye gönderilen rapor yalnızca bu işleri içerir).</summary>
     Task<JobReportDocument> BuildJobReportAsync(Guid id, CancellationToken ct);
 
+    /// <summary>Faturaya dahil edilen işlerin nakliye dökümü PDF'i (resmi fatura değildir).</summary>
+    Task<FileDownload> GetJobReportPdfAsync(Guid id, CancellationToken ct);
+
     /// <summary>Sağlayıcıda işlemde olan faturaların durumunu senkronize eder (arka plan).</summary>
     Task<int> SyncPendingAsync(CancellationToken ct);
 }

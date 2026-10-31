@@ -23,8 +23,6 @@ public sealed class LocationService(
 
     public async Task<LocationUpdateResult> UpdateAsync(UpdateLocationRequest request, CancellationToken ct)
     {
-        var opts = options.Value;
-        var now = clock.GetUtcNow().UtcDateTime;
         var job = await jobs.QueryAsNoTracking().Where(j => j.Id == request.JobId)
                       .Select(j => new { j.Id, j.Status, j.AssignedDriverId }).FirstOrDefaultAsync(ct)
                   ?? throw NotFoundException.For("İş");
@@ -32,9 +30,35 @@ public sealed class LocationService(
         // Konumu yalnızca işe atanmış kişinin cihazı gönderebilir (admin dahil): başka şoförün konumu değiştirilemez.
         if (job.AssignedDriverId != currentUser.UserId) throw new ForbiddenException("Bu iş için konum gönderme yetkiniz yok.");
         if (!TransportJob.TrackableStatuses.Contains(job.Status))
-            throw new ConflictException("Konum yalnızca aktif (yolda, yüklemede veya teslimatta) işler için kabul edilir.");
+            throw new ConflictException("Konum yalnızca aktif (kabul edilmiş, yolda, yüklemede veya teslimatta) işler için kabul edilir.");
 
-        var incoming = request.AllPoints();
+        var result = await IngestAsync(job.Id, request.AllPoints(), ct);
+        await unitOfWork.SaveChangesAsync(ct);
+        await PublishAsync(result.Latest, result.Stored, ct);
+        return result;
+    }
+
+    public async Task<DriverLocationUpdateResult> UpdateMyLocationAsync(DriverLocationRequest request, CancellationToken ct)
+    {
+        var trackable = TransportJob.TrackableStatuses.ToList();
+        // Aynı şoförün birden fazla aktif işi olabilir: tek GPS akışı tüm aktif işlerine yazılır.
+        var jobIds = await jobs.QueryAsNoTracking()
+            .Where(j => j.AssignedDriverId == currentUser.UserId && trackable.Contains(j.Status))
+            .OrderBy(j => j.JobDate).Select(j => j.Id).ToListAsync(ct);
+        if (jobIds.Count == 0) throw new ConflictException("Konum paylaşılacak aktif bir işiniz yok. Takip durdurulabilir.");
+
+        var results = new List<LocationUpdateResult>();
+        foreach (var jobId in jobIds) results.Add(await IngestAsync(jobId, request.Points, ct));
+        await unitOfWork.SaveChangesAsync(ct);
+        foreach (var r in results) await PublishAsync(r.Latest, r.Stored, ct);
+        return new DriverLocationUpdateResult(request.Points.Count, jobIds, results);
+    }
+
+    /// <summary>Konumları filtreler ve geçmişe / son konum tablosuna ekler (kaydetmez).</summary>
+    private async Task<LocationUpdateResult> IngestAsync(Guid jobId, IReadOnlyList<LocationPointRequest> incoming, CancellationToken ct)
+    {
+        var opts = options.Value;
+        var now = clock.GetUtcNow().UtcDateTime;
         var points = incoming
             .Select(p => new { Point = p, At = Normalize(p.RecordedAt ?? now) })
             .Where(p => p.At <= now + MaxClockSkew && p.At >= now - MaxBacklog)
@@ -43,7 +67,7 @@ public sealed class LocationService(
             .TakeLast(opts.MaxBatchSize)
             .ToList();
 
-        var latest = await latestLocations.Query().FirstOrDefaultAsync(l => l.JobId == job.Id, ct);
+        var latest = await latestLocations.Query().FirstOrDefaultAsync(l => l.JobId == jobId, ct);
         var lastLat = latest?.Latitude;
         var lastLng = latest?.Longitude;
         var lastAt = latest?.RecordedAt;
@@ -64,7 +88,7 @@ public sealed class LocationService(
 
             stored.Add(new Location
             {
-                JobId = job.Id,
+                JobId = jobId,
                 DriverId = currentUser.UserId,
                 Latitude = p.Latitude,
                 Longitude = p.Longitude,
@@ -78,13 +102,12 @@ public sealed class LocationService(
             lastAt = item.At;
         }
 
-        LocationDto? latestDto = latest is null ? null : ToDto(latest);
         if (stored.Count > 0)
         {
             var last = stored[^1];
             if (latest is null)
             {
-                latest = new JobLatestLocation { JobId = job.Id };
+                latest = new JobLatestLocation { JobId = jobId };
                 latestLocations.Add(latest);
             }
             latest.DriverId = last.DriverId;
@@ -95,22 +118,23 @@ public sealed class LocationService(
             latest.Heading = last.Heading;
             latest.RecordedAt = last.RecordedAt;
             latest.UpdatedAt = now;
-
             locations.AddRange(stored);
-            await unitOfWork.SaveChangesAsync(ct);
-            latestDto = ToDto(latest);
-
-            try
-            {
-                await broadcaster.PublishAsync(latestDto, ct);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Konum yayını başarısız. JobId: {JobId}", job.Id);
-            }
         }
 
-        return new LocationUpdateResult(incoming.Count, stored.Count, incoming.Count - stored.Count, latestDto);
+        return new LocationUpdateResult(incoming.Count, stored.Count, incoming.Count - stored.Count, latest is null ? null : ToDto(latest));
+    }
+
+    private async Task PublishAsync(LocationDto? latest, int stored, CancellationToken ct)
+    {
+        if (latest is null || stored == 0) return;
+        try
+        {
+            await broadcaster.PublishAsync(latest, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Konum yayını başarısız. JobId: {JobId}", latest.JobId);
+        }
     }
 
     public async Task<LocationDto> GetLatestAsync(Guid jobId, CancellationToken ct)

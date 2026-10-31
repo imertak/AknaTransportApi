@@ -13,7 +13,7 @@ public interface IJobService
     Task<JobDetailDto> UpdateAsync(Guid id, UpdateJobRequest request, CancellationToken ct);
     Task DeleteAsync(Guid id, CancellationToken ct);
     Task<JobDetailDto> AssignAsync(Guid id, AssignJobRequest request, CancellationToken ct);
-    Task<JobDetailDto> ClaimAsync(Guid id, JobActionRequest request, CancellationToken ct);
+    Task<JobDetailDto> ClaimAsync(Guid id, ClaimJobRequest request, CancellationToken ct);
     Task<JobDetailDto> AcceptAsync(Guid id, JobActionRequest request, CancellationToken ct);
     Task<JobDetailDto> StartAsync(Guid id, JobActionRequest request, CancellationToken ct);
     Task<JobDetailDto> StartLoadingAsync(Guid id, JobActionRequest request, CancellationToken ct);

@@ -9,7 +9,7 @@ namespace AknaTransportApi.Api.Controllers;
 public sealed class LocationsController(ILocationService locationService) : ApiControllerBase
 {
     /// <summary>
-    /// Şoför cihazından konum gönderimi. Yalnızca işe atanmış kişi ve yalnızca aktif (OnTheWay, Loading,
+    /// Şoför cihazından konum gönderimi. Yalnızca işe atanmış kişi ve yalnızca aktif (Accepted, OnTheWay, Loading,
     /// Delivering) işlerde kabul edilir. Anlamsız (yakın/sık) konumlar kaydedilmez; çevrimdışı biriken
     /// konumlar "points" dizisiyle toplu gönderilebilir.
     /// </summary>
@@ -17,6 +17,15 @@ public sealed class LocationsController(ILocationService locationService) : ApiC
     [EnableRateLimiting(RateLimitPolicies.Location)]
     public async Task<ActionResult<BaseResponse<LocationUpdateResult>>> Update(UpdateLocationRequest request, CancellationToken ct) =>
         Success(await locationService.UpdateAsync(request, ct));
+
+    /// <summary>
+    /// Şoför cihazının arka plan konum akışı. İş kimliği gerekmez: konum, oturumdaki kullanıcının tüm aktif
+    /// işlerine yazılır. Aktif iş yoksa 409 döner ve istemci takibi durdurur.
+    /// </summary>
+    [HttpPost("me")]
+    [EnableRateLimiting(RateLimitPolicies.Location)]
+    public async Task<ActionResult<BaseResponse<DriverLocationUpdateResult>>> UpdateMine(DriverLocationRequest request, CancellationToken ct) =>
+        Success(await locationService.UpdateMyLocationAsync(request, ct));
 
     [HttpGet("jobs/{jobId:guid}/latest")]
     public async Task<ActionResult<BaseResponse<LocationDto>>> Latest(Guid jobId, CancellationToken ct) =>

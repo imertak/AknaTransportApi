@@ -90,6 +90,24 @@ public sealed class DashboardService(
             .ToList();
     }
 
+    public async Task<MonthRevenueSummaryDto> GetRevenueAsync(int? year, int? month, CancellationToken ct)
+    {
+        var today = calendar.Today;
+        var y = year ?? today.Year;
+        var m = month ?? today.Month;
+        if (y is < 2000 or > 2100 || m is < 1 or > 12)
+            throw new BusinessValidationException("Geçerli bir yıl ve ay girin.", [new ErrorDetail("month", "Ay 1-12, yıl 2000-2100 aralığında olmalıdır.")]);
+
+        var start = new DateOnly(y, m, 1);
+        var end = start.AddMonths(1).AddDays(-1);
+        var row = await jobs.QueryAsNoTracking()
+            .Where(j => j.Status == JobStatus.Completed && j.JobDate >= start && j.JobDate <= end)
+            .GroupBy(_ => 1)
+            .Select(g => new { Revenue = g.Sum(j => j.Price), Count = g.Count() })
+            .FirstOrDefaultAsync(ct);
+        return new MonthRevenueSummaryDto(y, m, start, end, row?.Revenue ?? 0m, row?.Count ?? 0, Money.DefaultCurrency);
+    }
+
     public async Task<IReadOnlyList<JobDto>> GetRecentJobsAsync(int count, CancellationToken ct) =>
         await jobs.QueryAsNoTracking().OrderByDescending(j => j.CreatedAt).Take(Math.Clamp(count, 1, 50))
             .Select(JobMappings.Projection).ToListAsync(ct);

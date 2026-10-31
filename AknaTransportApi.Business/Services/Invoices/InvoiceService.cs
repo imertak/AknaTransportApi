@@ -15,6 +15,7 @@ public sealed class InvoiceService(
     INumberGenerator numberGenerator,
     IEArchiveInvoiceService eArchive,
     IDraftInvoicePdfGenerator draftPdf,
+    IJobReportPdfGenerator jobReportPdf,
     IFileStorage fileStorage,
     ICurrentUser currentUser,
     IOptions<AppOptions> appOptions,
@@ -156,6 +157,10 @@ public sealed class InvoiceService(
         invoice.EnsureEditable();
         var customer = await LoadCustomerForInvoiceAsync(invoice.CustomerId, ct);
 
+        // Kesimden önce faturadaki her işin hâlâ bu faturaya bağlı ve tamamlanmış olduğu doğrulanır.
+        if (invoice.Items.Count == 0 || invoice.Items.Any(x => x.Job is null || x.Job.InvoiceId != invoice.Id || x.Job.Status != JobStatus.Completed))
+            throw new ConflictException("Faturadaki işlerden biri artık bu faturaya bağlı değil veya tamamlanmış durumda değil. Faturayı güncelleyin.");
+
         // Pending durumu kaydedilir; ConcurrencyStamp sayesinde aynı fatura eşzamanlı iki kez gönderilemez.
         invoice.MarkPending(eArchive.ProviderName!);
         await unitOfWork.SaveChangesAsync(ct);
@@ -283,7 +288,7 @@ public sealed class InvoiceService(
         // Yalnızca bu faturanın kalemlerindeki işler: müşteriye başka işlerin kaydı gitmez.
         var rows = await invoiceItems.QueryAsNoTracking().Where(x => x.InvoiceId == id)
             .OrderBy(x => x.Job!.JobDate).ThenBy(x => x.Job!.JobNumber)
-            .Select(x => new JobReportRow(x.Job!.JobDate, x.Job.StoreName, x.Job.VehicleType, x.Job.Description, x.Job.Price, null))
+            .Select(x => new JobReportRow(x.Job!.JobDate, x.Job.StoreName, x.Job.VehicleType, (x.Job.RouteDescription == "" ? x.Job.Description : x.Job.Description == "" ? x.Job.RouteDescription : x.Job.RouteDescription + " (" + x.Job.Description + ")"), x.Job.Price, null))
             .ToListAsync(ct);
 
         return new JobReportDocument(
@@ -296,6 +301,13 @@ public sealed class InvoiceService(
             clock.GetUtcNow().UtcDateTime,
             header.CustomerName,
             $"Fatura No: {header.EArchiveInvoiceNumber ?? header.InvoiceNumber}");
+    }
+
+    public async Task<FileDownload> GetJobReportPdfAsync(Guid id, CancellationToken ct)
+    {
+        var report = await BuildJobReportAsync(id, ct);
+        var number = await invoices.QueryAsNoTracking().Where(i => i.Id == id).Select(i => i.EArchiveInvoiceNumber ?? i.InvoiceNumber).FirstAsync(ct);
+        return new FileDownload(jobReportPdf.Generate(report), $"Nakliye-Dokumu-{SafeName(number)}.pdf");
     }
 
     public async Task<int> SyncPendingAsync(CancellationToken ct)
@@ -417,7 +429,7 @@ public sealed class InvoiceService(
     {
         InvoiceId = invoiceId,
         JobId = job.Id,
-        Description = Truncate($"{job.JobDate:dd.MM.yyyy} {job.StoreName} - {job.Description} ({job.JobNumber})", 500),
+        Description = Truncate($"{job.JobDate:dd.MM.yyyy} {job.StoreName} - {JobMappings.ComposeText(job.RouteDescription, job.Description)} ({job.JobNumber})", 500),
         Quantity = 1,
         UnitPrice = job.Price,
     };

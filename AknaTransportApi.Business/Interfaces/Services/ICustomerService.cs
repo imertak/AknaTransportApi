@@ -12,6 +12,9 @@ public interface ICustomerService
     Task<CustomerSummaryDto> GetSummaryAsync(Guid id, CancellationToken ct);
     Task EnsureExistsAsync(Guid id, CancellationToken ct);
 
+    /// <summary>Müşterinin geçmiş işlerindeki yükleme/teslimat adresleri (tekilleştirilmiş, son kullanıma göre).</summary>
+    Task<IReadOnlyList<CustomerAddressDto>> GetAddressesAsync(Guid id, CustomerAddressQuery query, CancellationToken ct);
+
     /// <summary>Kaydı yalnızca unit of work'e ekler (iş oluştururken yeni müşteri için).</summary>
     Customer AddWithoutSaving(CustomerRequest request);
 }

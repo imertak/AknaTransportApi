@@ -60,3 +60,24 @@ public enum OutboxMessageStatus
     Processed = 1,
     Failed = 2,
 }
+
+/// <summary>İş durağının tipi. Bir işte birden fazla yükleme ve teslimat noktası olabilir.</summary>
+public enum StopType
+{
+    Pickup = 0,
+    Delivery = 1,
+}
+
+/// <summary>
+/// İşin faturalandırma durumu. Veritabanında ayrıca tutulmaz; işin bağlı olduğu faturanın
+/// (transport_jobs.InvoiceId) durumundan türetilir, böylece iki kayıt arasında tutarsızlık oluşmaz.
+/// </summary>
+public enum JobBillingStatus
+{
+    /// <summary>İş hiçbir faturaya bağlı değil.</summary>
+    NotInvoiced = 0,
+    /// <summary>İş taslak, gönderimde veya hatalı bir faturada; resmi fatura henüz kesilmedi.</summary>
+    InDraft = 1,
+    /// <summary>e-Arşiv sağlayıcısından başarılı yanıtla kesilmiş faturada.</summary>
+    Invoiced = 2,
+}

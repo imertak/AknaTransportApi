@@ -51,6 +51,14 @@ public sealed class CustomersController(ICustomerService customerService, IJobSe
         return Success(await invoiceService.ListAsync(query, ct));
     }
 
+    /// <summary>
+    /// Müşterinin geçmiş işlerinde kullanılan yükleme/teslimat adresleri ve kayıtlı koordinatları.
+    /// Filtreler: stopType=Pickup|Delivery, search, limit (en fazla 100).
+    /// </summary>
+    [HttpGet("{id:guid}/addresses")]
+    public async Task<ActionResult<BaseResponse<IReadOnlyList<CustomerAddressDto>>>> Addresses(Guid id, [FromQuery] CustomerAddressQuery query, CancellationToken ct) =>
+        Success(await customerService.GetAddressesAsync(id, query, ct));
+
     /// <summary>Toplam / tamamlanan iş, toplam nakliye ve fatura tutarı, son işler ve fatura geçmişi.</summary>
     [HttpGet("{id:guid}/summary")]
     public async Task<ActionResult<BaseResponse<CustomerSummaryDto>>> Summary(Guid id, CancellationToken ct) =>

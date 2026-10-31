@@ -53,6 +53,17 @@ public sealed class UpdateLocationRequest
 
 public sealed record LocationUpdateResult(int Received, int Stored, int Ignored, LocationDto? Latest);
 
+/// <summary>
+/// Şoför cihazının konum gönderimi. İş kimliği gönderilmez; konum, şoförün kabul edilmiş ve
+/// devam eden tüm işlerine yazılır. Çevrimdışı biriken konumlar tek istekte gönderilebilir.
+/// </summary>
+public sealed class DriverLocationRequest
+{
+    public List<LocationPointRequest> Points { get; set; } = [];
+}
+
+public sealed record DriverLocationUpdateResult(int Received, IReadOnlyList<Guid> JobIds, IReadOnlyList<LocationUpdateResult> Results);
+
 public sealed class LocationHistoryQuery : PagedQuery
 {
     public DateTime? From { get; set; }

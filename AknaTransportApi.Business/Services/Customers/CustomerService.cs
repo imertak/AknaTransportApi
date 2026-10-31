@@ -6,6 +6,7 @@ public sealed class CustomerService(
     IRepository<Customer> customers,
     IRepository<TransportJob> jobs,
     IRepository<Invoice> invoices,
+    IRepository<TransportJobStop> stops,
     IUnitOfWork unitOfWork) : ICustomerService
 {
     public async Task<PagedResult<CustomerDto>> ListAsync(CustomerQuery query, CancellationToken ct)
@@ -111,5 +112,37 @@ public sealed class CustomerService(
     public async Task EnsureExistsAsync(Guid id, CancellationToken ct)
     {
         if (!await customers.QueryAsNoTracking().AnyAsync(c => c.Id == id, ct)) throw NotFoundException.For("Müşteri");
+    }
+
+    public async Task<IReadOnlyList<CustomerAddressDto>> GetAddressesAsync(Guid id, CustomerAddressQuery query, CancellationToken ct)
+    {
+        await EnsureExistsAsync(id, ct);
+        var limit = Math.Clamp(query.Limit, 1, 100);
+
+        // Ayrı adres tablosu tutulmaz: adres geçmişi bu müşterinin iş duraklarından türetilir.
+        var q = stops.QueryAsNoTracking().Where(s => s.TransportJob!.CustomerId == id && s.TransportJob.Status != JobStatus.Cancelled);
+        if (query.StopType is { } type) q = q.Where(s => s.StopType == type);
+        if (query.Search.TrimOrNull() is { } search)
+        {
+            var term = search.ToLower();
+            q = q.Where(s => s.Address.ToLower().Contains(term));
+        }
+
+        // Son kullanılan 1000 durak bellekte tekilleştirilir (büyük müşterilerde bile hafif bir sorgu).
+        var recent = await q.OrderByDescending(s => s.CreatedAt).Take(1000)
+            .Select(s => new { s.StopType, s.Address, s.Latitude, s.Longitude, s.CreatedAt })
+            .ToListAsync(ct);
+
+        return recent
+            .GroupBy(s => (s.StopType, Key: s.Address.Trim().ToLowerInvariant()))
+            .Select(g =>
+            {
+                var latest = g.First();
+                var located = g.FirstOrDefault(s => s.Latitude != null && s.Longitude != null);
+                return new CustomerAddressDto(g.Key.StopType, latest.Address.Trim(), located?.Latitude, located?.Longitude, g.Count(), latest.CreatedAt);
+            })
+            .OrderByDescending(a => a.LastUsedAt)
+            .Take(limit)
+            .ToList();
     }
 }

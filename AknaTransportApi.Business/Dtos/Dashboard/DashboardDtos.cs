@@ -23,6 +23,12 @@ public sealed record DailyJobCountDto(DateOnly Date, int Total, int Completed, d
 
 public sealed record MonthlyRevenueDto(int Year, int Month, decimal Revenue, int CompletedJobs);
 
+/// <summary>
+/// Bir ayın nakliye geliri: iş tarihi o ay içinde olan ve tamamlanmış işlerin toplam tutarı.
+/// İptal edilen işler dahil edilmez; faturalandırılmış olmak tek başına gelir kriteri değildir.
+/// </summary>
+public sealed record MonthRevenueSummaryDto(int Year, int Month, DateOnly StartDate, DateOnly EndDate, decimal Revenue, int CompletedJobs, string Currency);
+
 public sealed record ActiveDriverDto(
     Guid DriverId,
     string FullName,

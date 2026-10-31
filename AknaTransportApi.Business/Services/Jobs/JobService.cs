@@ -7,6 +7,7 @@ public sealed class JobService(
     IRepository<TransportJob> jobs,
     IRepository<JobStatusHistory> history,
     IRepository<User> users,
+    IRepository<DriverVehicle> driverVehicles,
     ICustomerService customerService,
     INumberGenerator numberGenerator,
     IUnitOfWork unitOfWork,
@@ -56,6 +57,7 @@ public sealed class JobService(
         var now = Now;
         var driverId = request.AssignToMe ? currentUser.UserId : request.AssignedDriverId;
         if (driverId is { } d && d != currentUser.UserId) await EnsureAssignableDriverAsync(d, ct);
+        if (driverId is { } owner && request.AssignedVehicleId is { } vehicleId) await EnsureDriverVehicleAsync(owner, vehicleId, ct);
 
         var jobId = await unitOfWork.ExecuteInTransactionAsync(async token =>
         {
@@ -77,8 +79,9 @@ public sealed class JobService(
                 Currency = request.Currency ?? Domain.Common.Money.DefaultCurrency,
             };
             job.Apply(request);
+            job.SetStops(request.ResolveStops(), now);
             job.JobNumber = await numberGenerator.NextJobNumberAsync(request.JobDate, token);
-            job.Initialize(currentUser.UserId, driverId, now);
+            job.Initialize(currentUser.UserId, driverId, now, driverId is null ? null : request.AssignedVehicleId);
             jobs.Add(job);
             await unitOfWork.SaveChangesAsync(token);
             return job.Id;
@@ -91,11 +94,13 @@ public sealed class JobService(
     public async Task<JobDetailDto> UpdateAsync(Guid id, UpdateJobRequest request, CancellationToken ct)
     {
         EnsureAdmin();
-        var job = await LoadForUpdateAsync(id, ct);
+        var job = await jobs.Query().Include(j => j.Stops).FirstOrDefaultAsync(j => j.Id == id, ct) ?? throw NotFoundException.For("İş");
         job.EnsureEditable();
         if (job.CustomerId != request.CustomerId) await customerService.EnsureExistsAsync(request.CustomerId, ct);
         job.CustomerId = request.CustomerId;
         job.Apply(request);
+        // Duraklar değiştiğinde güzergâh metni yeniden üretilir; elle yazılan açıklama korunur.
+        job.SetStops(request.ResolveStops(), Now);
         job.ConcurrencyStamp = Guid.NewGuid();
         await unitOfWork.SaveChangesAsync(ct);
         return await GetAsync(id, ct);
@@ -115,13 +120,16 @@ public sealed class JobService(
     {
         EnsureAdmin();
         if (request.DriverId is { } driverId && driverId != currentUser.UserId) await EnsureAssignableDriverAsync(driverId, ct);
-        return await MutateAsync(id, job => job.AssignDriver(request.DriverId, currentUser.UserId, Now, request.Note.TrimOrNull()), requireOwnership: false, ct);
+        if (request.DriverId is { } owner && request.VehicleId is { } vehicleId) await EnsureDriverVehicleAsync(owner, vehicleId, ct);
+        return await MutateAsync(id, job => job.AssignDriver(request.DriverId, currentUser.UserId, Now, request.Note.TrimOrNull(), request.VehicleId), requireOwnership: false, ct);
     }
 
-    public Task<JobDetailDto> ClaimAsync(Guid id, JobActionRequest request, CancellationToken ct)
+    public async Task<JobDetailDto> ClaimAsync(Guid id, ClaimJobRequest request, CancellationToken ct)
     {
         EnsureAdmin();
-        return MutateAsync(id, job => job.ClaimBy(currentUser.UserId, Now, request.Note.TrimOrNull()), requireOwnership: false, ct);
+        // Yönetici kendi üzerine aldığı işte yalnızca kendisine atanmış aktif araçlardan birini seçebilir.
+        if (request.VehicleId is { } vehicleId) await EnsureDriverVehicleAsync(currentUser.UserId, vehicleId, ct);
+        return await MutateAsync(id, job => job.ClaimBy(currentUser.UserId, Now, request.Note.TrimOrNull(), request.VehicleId), requireOwnership: false, ct);
     }
 
     public Task<JobDetailDto> AcceptAsync(Guid id, JobActionRequest request, CancellationToken ct) =>
@@ -162,9 +170,16 @@ public sealed class JobService(
         {
             var s = search.ToLower();
             q = q.Where(j => j.JobNumber.ToLower().Contains(s) || j.StoreName.ToLower().Contains(s) || j.Description.ToLower().Contains(s)
-                             || j.PickupAddress.ToLower().Contains(s) || j.DeliveryAddress.ToLower().Contains(s));
+                             || j.RouteDescription.ToLower().Contains(s) || j.Stops.Any(st => st.Address.ToLower().Contains(s)));
         }
         if (query.Uninvoiced is { } uninvoiced) q = uninvoiced ? q.Where(j => j.InvoiceId == null) : q.Where(j => j.InvoiceId != null);
+        q = query.BillingStatus switch
+        {
+            JobBillingStatus.NotInvoiced => q.Where(j => j.InvoiceId == null),
+            JobBillingStatus.InDraft => q.Where(j => j.InvoiceId != null && j.Invoice!.Status != InvoiceStatus.Issued),
+            JobBillingStatus.Invoiced => q.Where(j => j.InvoiceId != null && j.Invoice!.Status == InvoiceStatus.Issued),
+            _ => q,
+        };
         return q;
     }
 
@@ -206,6 +221,16 @@ public sealed class JobService(
     {
         var ok = await users.QueryAsNoTracking().AnyAsync(u => u.Id == driverId && u.IsActive, ct);
         if (!ok) throw new BusinessValidationException("Seçilen şoför bulunamadı veya pasif durumda.", [new ErrorDetail("driverId", "Geçerli bir şoför seçin.")]);
+    }
+
+    /// <summary>Araç aktif olmalı ve şoföre aktif olarak atanmış olmalı.</summary>
+    private async Task EnsureDriverVehicleAsync(Guid driverId, Guid vehicleId, CancellationToken ct)
+    {
+        var ok = await driverVehicles.QueryAsNoTracking()
+            .AnyAsync(a => a.DriverId == driverId && a.VehicleId == vehicleId && a.IsActive && a.Vehicle!.IsActive, ct);
+        if (!ok)
+            throw new BusinessValidationException("Seçilen araç bu şoföre ait değil veya pasif durumda.",
+                [new ErrorDetail("vehicleId", "Şoförün aktif araçlarından birini seçin.")]);
     }
 
     private void EnsureAdmin()

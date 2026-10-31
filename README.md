@@ -21,16 +21,22 @@ AKNA Transport nakliye ve lojistik yönetim sisteminin backend'i. .NET 9, ASP.NE
 
 ## Mimari
 
+Katman düzeni [MerfitCustomerApi](https://github.com/akna-solutions/MerfitCustomerApi) referans alınarak kuruldu (yalnızca klasör/proje organizasyonu; iş mantığı AKNA'ya özeldir).
+
 ```
-AknaTransport.sln
-├── src/
-│   ├── AknaTransport.Domain          Entity, enum, domain kuralları (durum makinesi), domain exception, repository arayüzleri
-│   ├── AknaTransport.Business        Servisler, DTO, FluentValidation, mapping, iş kuralları, entegrasyon arayüzleri
-│   ├── AknaTransport.Infrastructure  DbContext, Fluent API config, repository, migration, PDF, SMTP, SMS/e-Arşiv adapter, arka plan işleri
-│   └── AknaTransport.Api             Controller, JWT, yetkilendirme, middleware, hata yönetimi, Swagger, rate limit
-└── tests/
-    └── AknaTransport.Tests           Unit + integration testleri
+AknaTransportApi.sln
+├── AknaTransportApi.Domain           Entities, Enums, Common (Entity, Money), Exceptions,
+│                                     Interfaces (IUnitOfWork, INumberGenerator), Interfaces/Repositories (IRepository)
+├── AknaTransportApi.Business         Common (yanıt zarfı, sayfalama, hatalar, seçenekler), Dtos/<Özellik>,
+│                                     Interfaces/Services (servis + entegrasyon sözleşmeleri), Services/<Özellik>,
+│                                     Validators/<Özellik> (FluentValidation), Mappings
+├── AknaTransportApi.Infrastructure   Persistence (AppDbContext, UnitOfWork, Repositories, Migrations, Seed),
+│                                     Configurations (EF Fluent API), Pdf, Email, Sms, EArchive, Storage, Security, BackgroundJobs
+├── AknaTransportApi.Api              Controllers, Middleware, Filters, Extensions (DI, JWT, Swagger, rate limit), Security, Program.cs
+└── AknaTransportApi.Business.Tests   Unit + integration testleri
 ```
+
+Her projenin `GlobalUsings.cs` dosyası yalnızca kendisinin ve bağımlı olduğu katmanların namespace'lerini içerir.
 
 Bağımlılık yönü: `Api → Business, Infrastructure`, `Infrastructure → Business, Domain`, `Business → Domain`. Domain hiçbir projeye bağımlı değildir. Döngüsel bağımlılık yoktur.
 
@@ -51,7 +57,7 @@ Gereksinimler: .NET 9 SDK, PostgreSQL 14+ (veya Docker).
 docker compose up -d
 
 # 2) Gizli ayarlar (Development için User Secrets; repoya yazılmaz)
-cd src/AknaTransport.Api
+cd AknaTransportApi.Api
 dotnet user-secrets set "Jwt:Secret" "$(openssl rand -base64 48)"
 dotnet user-secrets set "Seed:AdminEmail" "admin@akna.local"
 dotnet user-secrets set "Seed:AdminPassword" "GüçlüBirŞifre123"
@@ -69,24 +75,24 @@ Development örnek verisi: Starbucks, Calvin Klein ve Bestseller müşterileri i
 
 ## Veritabanı ve migration
 
-Migration'lar `src/AknaTransport.Infrastructure/Persistence/Migrations` altındadır. EF aracı repo içinde sabitlenmiştir (`dotnet-tools.json`).
+Migration'lar `AknaTransportApi.Infrastructure/Persistence/Migrations` altındadır. EF aracı repo içinde sabitlenmiştir (`dotnet-tools.json`).
 
 ```bash
 dotnet tool restore
 
 # Yeni migration
 dotnet ef migrations add <Ad> \
-  --project src/AknaTransport.Infrastructure \
-  --startup-project src/AknaTransport.Infrastructure \
+  --project AknaTransportApi.Infrastructure \
+  --startup-project AknaTransportApi.Infrastructure \
   --output-dir Persistence/Migrations
 
 # Veritabanını güncelle (bağlantı dizesi environment variable'dan okunur)
 export AKNA_DESIGN_CONNECTION="Host=localhost;Port=5432;Database=akna_transport;Username=akna;Password=akna_dev_password"
-dotnet ef database update --project src/AknaTransport.Infrastructure --startup-project src/AknaTransport.Infrastructure
+dotnet ef database update --project AknaTransportApi.Infrastructure --startup-project AknaTransportApi.Infrastructure
 
 # Üretim için idempotent SQL betiği
 dotnet ef migrations script --idempotent -o migrate.sql \
-  --project src/AknaTransport.Infrastructure --startup-project src/AknaTransport.Infrastructure
+  --project AknaTransportApi.Infrastructure --startup-project AknaTransportApi.Infrastructure
 ```
 
 Hazır şema betiği `database/akna_transport_schema.sql` dosyasındadır. Boş bir PostgreSQL veritabanına doğrudan uygulanabilir ve tekrar çalıştırmak güvenlidir:
@@ -193,7 +199,9 @@ HTTP kodları: 200/201 başarı, 400 doğrulama, 401 oturum yok/geçersiz (süre
 `GET /` (filtre: `role`, `isActive`, `search`), `GET /{id}`, `POST /`, `PUT /{id}`, `POST /{id}/reset-password` (yeni geçici şifre + SMS).
 
 ### Müşteriler — `/api/customers` (Admin)
-`GET /` (`search`, `isActive`), `GET /{id}`, `POST /`, `PUT /{id}`, `DELETE /{id}`, `GET /{id}/jobs`, `GET /{id}/invoices`, `GET /{id}/summary`.
+`GET /` (`search`, `isActive`), `GET /{id}`, `POST /`, `PUT /{id}`, `DELETE /{id}`, `GET /{id}/jobs`, `GET /{id}/invoices`, `GET /{id}/summary`, `GET /{id}/addresses` (`stopType=Pickup|Delivery`, `search`, `limit`).
+
+Adres geçmişi ayrı bir tabloda tutulmaz; müşterinin iptal edilmemiş işlerinin duraklarından tekilleştirilerek (son kullanıma göre, koordinatlarıyla) üretilir.
 
 Geçmiş iş veya faturası olan müşteri silinmez, pasife alınır (`isActive=false`); kayıtlar bozulmaz. Özet: toplam/tamamlanan iş sayısı, toplam nakliye tutarı (tamamlanan işler), toplam fatura tutarı (kesilmiş faturalar), son 10 iş, son 20 fatura.
 
@@ -207,13 +215,13 @@ Geçmiş iş veya faturası olan müşteri silinmez, pasife alınır (`isActive=
 | POST | `/` | Admin |
 | PUT | `/{id}` | Admin |
 | DELETE | `/{id}` | Admin (yalnızca başlamamış/iptal, faturalanmamış) |
-| PATCH | `/{id}/assign` | Admin (`driverId: null` atamayı kaldırır) |
-| PATCH | `/{id}/claim` | Admin (işi üstlenir → Accepted) |
+| PATCH | `/{id}/assign` | Admin (`driverId`, `vehicleId`; `driverId: null` atamayı kaldırır) |
+| PATCH | `/{id}/claim` | Admin (işi üstlenir → Accepted; isteğe bağlı kendi aracı `vehicleId`) |
 | PATCH | `/{id}/accept`, `/start`, `/start-loading`, `/start-delivery`, `/complete` | Admin veya atanmış şoför |
 | PATCH | `/{id}/cancel` | Admin |
 | POST / DELETE | `/{id}/tracking-links` | Admin (müşteri takip bağlantısı oluştur / iptal et) |
 
-Liste filtreleri: `startDate`, `endDate`, `customerId`, `driverId`, `status` (çoklu: `?status=Pending&status=Assigned`), `vehicleType`, `storeName`, `search`, `uninvoiced`. Sıralama: `sortBy=jobDate|price|createdAt|jobNumber|status|storeName`.
+Liste filtreleri: `startDate`, `endDate`, `customerId`, `driverId`, `status` (çoklu: `?status=Pending&status=Assigned`), `vehicleType`, `storeName`, `search`, `uninvoiced`, `billingStatus` (`NotInvoiced`, `InDraft`, `Invoiced`). Sıralama: `sortBy=jobDate|price|createdAt|jobNumber|status|storeName`.
 
 İş oluşturma örneği (yeni müşteriyle ve kendine atayarak):
 
@@ -224,25 +232,52 @@ POST /api/jobs
   "jobDate": "2026-10-19",
   "storeName": "Starbucks",
   "vehicleType": "Panelvan",
-  "pickupAddress": "Portashelf",
-  "deliveryAddress": "Haliç Tersane",
-  "description": "Portashelf - Haliç Tersane",
+  "stops": [
+    { "stopType": "Pickup", "address": "İstanbul / Ümraniye", "latitude": 41.0165, "longitude": 29.1248 },
+    { "stopType": "Pickup", "address": "İstanbul / İkitelli" },
+    { "stopType": "Delivery", "address": "İstanbul / Zorlu AVM" },
+    { "stopType": "Delivery", "address": "İstanbul / Haliç Tersane" }
+  ],
+  "description": "+1 eleman yevmiyesi",
   "price": 4000,
-  "assignToMe": true
+  "assignToMe": true,
+  "assignedVehicleId": "…"
 }
 ```
 
+Çoklu durak kuralları:
+- Duraklar `transport_job_stops` tablosunda tutulur; her tip için `Sequence` 1'den başlar ve `(TransportJobId, StopType, Sequence)` benzersizdir. En az bir yükleme ve bir teslimat noktası zorunludur.
+- `routeDescription` otomatik üretilir: önce tüm yüklemeler, sonra tüm teslimatlar `" - "` ile birleştirilir. Duraklar değişince yeniden üretilir; kullanıcının yazdığı `description` ayrı tutulur ve kaybolmaz. PDF ve fatura satırlarında `güzergâh (açıklama)` biçiminde gösterilir.
+- `pickupAddress`/`deliveryAddress` alanları ilk yükleme ve son teslimat noktasının özetidir (liste, arama, müşteri takibi). Eski istemciler `stops` göndermeden bu iki alanla iş oluşturmaya devam edebilir.
+- Yanıtta `stops`, `assignedVehicleId`, `assignedVehiclePlate` ve `billingStatus` alanları bulunur. `billingStatus` ayrı bir kolon değildir; işin bağlı olduğu faturanın durumundan türetilir (fatura yok → `NotInvoiced`, Draft/Pending/Failed → `InDraft`, Issued → `Invoiced`).
+
+### Araçlar — `/api/vehicles`
+| Metot | Yol | Yetki |
+|---|---|---|
+| GET | `/` (`driverId`, `isActive`, `search`) | Admin |
+| GET | `/my` | Oturum (kullanıcının aktif atanmış araçları) |
+| GET | `/{id}` | Admin veya aracın şoförü |
+| POST / PUT | `/`, `/{id}` | Admin |
+| POST | `/{id}/assign` (`driverId`), `/{id}/unassign` | Admin |
+
+- Araç ekleme, düzenleme ve şoföre atama yalnızca yöneticiye açıktır; şoför araçlarını yalnızca görüntüler.
+- Bir şoförün birden fazla aracı olabilir. Bir araç aynı anda yalnızca bir şoföre atanabilir: servis 409 döner, `driver_vehicles(VehicleId) WHERE "IsActive"` filtreli benzersiz indeksi eşzamanlı istekleri de engeller. Atama kaldırıldığında kayıt silinmez, `IsActive=false` olur (geçmiş korunur).
+- Plaka büyük harfe ve tek boşluğa normalize edilir ve benzersizdir. Pasif araç yeni işe veya şoföre atanamaz.
+- İşe araç atanırken araç aktif olmalı ve seçilen şoföre aktif olarak atanmış olmalıdır; yönetici kendi üstlendiği işte yalnızca kendi araçlarını seçebilir.
+
 ### Konum — `/api/locations`
-`POST /update`, `GET /jobs/{jobId}/latest`, `GET /jobs/{jobId}/history` (sayfalı, `from`, `to`), `GET /active-jobs`. Müşteri takip bağlantısı: `GET /api/tracking/{token}` (oturumsuz, yalnızca durum ve konum; fiyat içermez).
+`POST /me` (şoför cihazının konum akışı; iş kimliği gerekmez, şoförün tüm aktif işlerine yazılır, aktif iş yoksa 409), `POST /update`, `GET /jobs/{jobId}/latest`, `GET /jobs/{jobId}/history` (sayfalı, `from`, `to`), `GET /active-jobs`. Müşteri takip bağlantısı: `GET /api/tracking/{token}` (oturumsuz, yalnızca durum ve konum; fiyat içermez).
 
 ### Faturalar — `/api/invoices` (Admin)
-`GET /`, `GET /{id}`, `POST /`, `PUT /{id}`, `POST /{id}/issue`, `POST /{id}/cancel`, `GET /{id}/pdf`, `GET /{id}/jobs`, `POST /{id}/resend-email`.
+`GET /`, `GET /{id}`, `POST /`, `PUT /{id}`, `POST /{id}/issue`, `POST /{id}/cancel`, `GET /{id}/pdf`, `GET /{id}/job-report/pdf` (faturadaki işlerin nakliye dökümü), `GET /{id}/jobs`, `POST /{id}/resend-email`.
+
+Bir faturaya yalnızca aynı müşterinin tamamlanmış ve başka faturada olmayan işleri eklenebilir. İş, taslak oluşturulurken `transport_jobs.InvoiceId` koşullu güncellemesiyle (yalnızca `InvoiceId IS NULL` satırlar, transaction içinde) faturaya bağlanır; bu yüzden aynı iş eşzamanlı iki faturaya eklenemez. Kesim öncesinde her işin hâlâ bu faturaya bağlı ve tamamlanmış olduğu yeniden doğrulanır.
 
 ### Raporlar — `/api/reports` (Admin)
 `GET /jobs/pdf`, `GET /jobs/summary`, `GET /jobs` — parametreler: `startDate`, `endDate`, `customerId`, `driverId`, `storeName`, `vehicleType`, `scope` (`Completed` varsayılan, `NotCancelled`, `All`).
 
 ### Dashboard — `/api/dashboard` (Admin)
-`GET /summary`, `GET /daily-jobs?days=30`, `GET /monthly-revenue?months=12`, `GET /recent-jobs?count=10`, `GET /active-drivers`.
+`GET /summary`, `GET /revenue?year=2026&month=10` (aylık nakliye geliri; parametresiz çağrıda içinde bulunulan ay), `GET /daily-jobs?days=30`, `GET /monthly-revenue?months=12`, `GET /recent-jobs?count=10`, `GET /active-drivers`.
 
 Özet alanları: `totalJobs`, `pendingJobs`, `assignedJobs`, `activeJobs` (Accepted + OnTheWay + Loading + Delivering), `completedJobs`, `cancelledJobs`, `totalRevenue` (tamamlanan işlerin tutarı), `monthlyRevenue` (bu ay, iş tarihine göre), `totalCustomers` (aktif), `activeDrivers` (şu an aktif işi olan şoför). Tüm istatistikler veritabanında `GROUP BY`/`SUM` ile hesaplanır.
 
@@ -261,7 +296,8 @@ Pending ──assign──▶ Assigned ──accept──▶ Accepted ──star
 
 ## Konum takibi
 
-- Konum yalnızca işe atanmış kişiden ve yalnızca `OnTheWay`, `Loading`, `Delivering` durumlarında kabul edilir.
+- Konum yalnızca işe atanmış kişiden ve yalnızca `Accepted`, `OnTheWay`, `Loading`, `Delivering` durumlarında kabul edilir. Takip şoför işi kabul ettiği anda başlar; tamamlanan veya iptal edilen işe konum eklenemez (409).
+- Mobil uygulama arka plan konum akışını `POST /api/locations/me` ile gönderir. Şoförün birden fazla aktif işi varsa aynı konum hepsine yazılır; tek bir GPS akışı yeterlidir.
 - Sunucu tarafı filtre: bir önceki kayda göre en az `MinDistanceMeters` (30 m) **ve** `MinIntervalSeconds` (15 sn) fark yoksa kayıt atılmaz; araç dursa bile `HeartbeatSeconds` (120 sn) aralıkla bir kayıt alınır. Doğruluğu `MaxAccuracyMeters` (200 m) üzerindeki, gelecekteki veya 12 saatten eski konumlar reddedilir.
 - Çevrimdışı biriken konumlar tek istekte `points` dizisiyle toplu gönderilir (en fazla 50 işlenir) ve tek `SaveChanges` ile yazılır.
 - Son konum ayrı `job_latest_locations` tablosunda (iş başına tek satır, PK = JobId) tutulur; harita sorguları büyük geçmiş tablosuna gitmez. Geçmiş için `(JobId, RecordedAt)` index'i ve sayfalama (en fazla 500) vardır.
@@ -329,7 +365,7 @@ Mobil uygulama `EXPO_PUBLIC_API_BASE_URL` tanımlandığında bu API'yi kullanı
 
 ```bash
 # API (Development, port 5080). Telefon/emülatörden erişilecekse tüm arayüzlerde dinletin:
-dotnet run --project src/AknaTransport.Api --urls http://0.0.0.0:5080
+dotnet run --project AknaTransportApi.Api --urls http://0.0.0.0:5080
 
 # Mobil uygulama (ayrı terminal, AknaTransportNative kökünde)
 echo "EXPO_PUBLIC_API_BASE_URL=http://localhost:5080" > .env.local   # web / iOS simülatör
@@ -393,7 +429,9 @@ dotnet build
 dotnet test
 ```
 
-Integration testleri `WebApplicationFactory` ile API'yi geçici bir SQLite veritabanıyla ayağa kaldırır (PostgreSQL gerekmez). Kapsanan senaryolar: admin ve şoför girişi, açık kaydın engellenmesi, geçici şifre zorunluluğu, refresh token rotation ve tekrar kullanım tespiti, yetkisiz iş oluşturma, admin'in işi kendine ataması ve şoför gibi tamamlaması, şoförün yalnızca kendi işlerini görmesi, başka şoförün işini/konumunu değiştirememe, tamamlanmış işin yeniden başlatılamaması, konum filtresi, aynı işin iki faturaya eklenememesi, gerçek e-Arşiv yanıtı olmadan Issued olmaması, başarılı faturada e-postanın kuyruğa alınması, mail hatasında faturanın yeniden kesilmemesi, aynı mailin iki kez gönderilmemesi, PDF raporunda tarih aralığı ve durum kapsamı, dashboard ve müşteri pasife alma.
+Integration testleri `WebApplicationFactory` ile API'yi geçici bir SQLite veritabanıyla ayağa kaldırır (PostgreSQL gerekmez). Kapsanan senaryolar: admin ve şoför girişi, açık kaydın engellenmesi, geçici şifre zorunluluğu, refresh token rotation ve tekrar kullanım tespiti, yetkisiz iş oluşturma, admin'in işi kendine ataması ve şoför gibi tamamlaması, şoförün yalnızca kendi işlerini görmesi, başka şoförün işini/konumunu değiştirememe, tamamlanmış işin yeniden başlatılamaması, konum filtresi, aynı işin iki faturaya eklenememesi, gerçek e-Arşiv yanıtı olmadan Issued olmaması, başarılı faturada e-postanın kuyruğa alınması, mail hatasında faturanın yeniden kesilmemesi, aynı mailin iki kez gönderilmemesi, PDF raporunda tarih aralığı ve durum kapsamı, dashboard ve müşteri pasife alma, çoklu durak ve güzergâh açıklaması, müşteri bazlı adres geçmişi, şoföre ait olmayan/pasif aracın işe atanamaması, aracın iki şoföre atanamaması, kabulle başlayan ve iş kapanınca duran konum takibi, faturalandırma durumu (NotInvoiced → InDraft → Invoiced), fatura döküm PDF'i ve aylık gelir (iptal ve bekleyen işler hariç).
+
+Not: Proje `net9.0` hedefler. Yalnızca .NET 10 SDK/runtime kurulu bir makinede testleri çalıştırmak için `DOTNET_ROLL_FORWARD=Major dotnet test` kullanılabilir.
 
 ## Gerçek sağlayıcı bilgisi bekleyen entegrasyonlar
 

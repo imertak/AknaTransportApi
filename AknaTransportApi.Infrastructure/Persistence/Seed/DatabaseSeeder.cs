@@ -86,15 +86,24 @@ public sealed class DatabaseSeeder(
         var bestseller = new Customer { CompanyName = "Bestseller", ContactPerson = "Depo Sorumlusu", Email = "fatura@bestseller.example", PhoneNumber = "+902120000003", TaxOffice = "Beylikdüzü", TaxNumber = "3234567890", Address = "İstanbul" };
         db.Customers.AddRange(starbucks, calvin, bestseller);
 
-        var rows = new (DateOnly Date, Customer Customer, VehicleType Vehicle, string Pickup, string Delivery, string Description, decimal Price)[]
+        var van = new Vehicle { PlateNumber = "34 AKN 101", Brand = "Ford", Model = "Transit", VehicleType = VehicleType.Panelvan };
+        var smallVan = new Vehicle { PlateNumber = "34 AKN 202", Brand = "Fiat", Model = "Doblo", VehicleType = VehicleType.SmallPanelvan };
+        db.Vehicles.AddRange(van, smallVan);
+        var vehicleOwner = driver ?? admin;
+        db.DriverVehicles.AddRange(
+            new DriverVehicle { DriverId = vehicleOwner.Id, VehicleId = van.Id, AssignedAt = now, AssignedByUserId = admin.Id },
+            new DriverVehicle { DriverId = vehicleOwner.Id, VehicleId = smallVan.Id, AssignedAt = now, AssignedByUserId = admin.Id });
+
+        // Yükleme noktaları '|' ile ayrılır; açıklama alanı yalnızca elle yazılan ek bilgidir.
+        var rows = new (DateOnly Date, Customer Customer, VehicleType Vehicle, string Pickups, string Delivery, string Description, decimal Price)[]
         {
-            (new(2026, 10, 19), starbucks, VehicleType.Panelvan, "Portashelf", "Haliç Tersane", "Portashelf - Haliç Tersane", 4000m),
-            (new(2026, 10, 19), starbucks, VehicleType.Panelvan, "Gebze TLS", "Haliç Tersane", "Gebze TLS - Haliç Tersane", 8000m),
-            (new(2026, 10, 20), starbucks, VehicleType.Panelvan, "Haliç Tersane", "Gebze TLS", "Haliç Tersane - Gebze TLS (+1 eleman yevmiyesi - gece yükleme ertesi gün boşaltma)", 10000m),
-            (new(2026, 10, 20), starbucks, VehicleType.Panelvan, "Haliç Tersane", "Dudullu Hokuha Halı", "Haliç Tersane - Dudullu Hokuha Halı", 4000m),
-            (new(2026, 10, 20), calvin, VehicleType.SmallPanelvan, "Ümraniye", "Zorlu AVM", "Ümraniye - İkitelli YS Metal - Zorlu AVM", 4000m),
-            (new(2026, 10, 21), calvin, VehicleType.SmallPanelvan, "İkitelli Buroser", "Zorlu AVM", "İkitelli Buroser - Zorlu AVM", 3500m),
-            (new(2026, 10, 22), bestseller, VehicleType.Panelvan, "Akpınar Depo", "Beylikdüzü 2000 Reklam", "Akpınar Depo - Beylikdüzü 2000 Reklam (Vadi İstanbul Bestseller iadeleri)", 3000m),
+            (new(2026, 10, 19), starbucks, VehicleType.Panelvan, "Portashelf", "Haliç Tersane", "", 4000m),
+            (new(2026, 10, 19), starbucks, VehicleType.Panelvan, "Gebze TLS", "Haliç Tersane", "", 8000m),
+            (new(2026, 10, 20), starbucks, VehicleType.Panelvan, "Haliç Tersane", "Gebze TLS", "+1 eleman yevmiyesi - gece yükleme ertesi gün boşaltma", 10000m),
+            (new(2026, 10, 20), starbucks, VehicleType.Panelvan, "Haliç Tersane", "Dudullu Hokuha Halı", "", 4000m),
+            (new(2026, 10, 20), calvin, VehicleType.SmallPanelvan, "Ümraniye|İkitelli YS Metal", "Zorlu AVM", "", 4000m),
+            (new(2026, 10, 21), calvin, VehicleType.SmallPanelvan, "İkitelli Buroser", "Zorlu AVM", "", 3500m),
+            (new(2026, 10, 22), bestseller, VehicleType.Panelvan, "Akpınar Depo", "Beylikdüzü 2000 Reklam", "Vadi İstanbul Bestseller iadeleri", 3000m),
         };
 
         var assignee = driver ?? admin;
@@ -110,12 +119,14 @@ public sealed class DatabaseSeeder(
                 JobDate = r.Date,
                 StoreName = r.Customer.CompanyName,
                 VehicleType = r.Vehicle,
-                PickupAddress = r.Pickup,
-                DeliveryAddress = r.Delivery,
                 Description = r.Description,
                 Price = r.Price,
                 CreatedAt = startedAt.AddHours(-3),
             };
+            job.SetStops([
+                .. r.Pickups.Split('|').Select(p => new JobStopInput(StopType.Pickup, p, null, null, null)),
+                new JobStopInput(StopType.Delivery, r.Delivery, null, null, null),
+            ], now);
             job.ForceStatusForSeed(JobStatus.Completed, startedAt, startedAt.AddHours(4));
             AddHistory(job, admin.Id, assignee.Id, startedAt);
             db.TransportJobs.Add(job);
@@ -126,17 +137,24 @@ public sealed class DatabaseSeeder(
         var open1 = new TransportJob
         {
             CustomerId = starbucks.Id, CreatedByUserId = admin.Id, JobDate = today, StoreName = "Starbucks",
-            VehicleType = VehicleType.Panelvan, PickupAddress = "Gebze TLS", DeliveryAddress = "Haliç Tersane", Description = "Gebze TLS - Haliç Tersane",
-            Price = 8000m, PickupLatitude = 40.8026, PickupLongitude = 29.4307, DeliveryLatitude = 41.0383, DeliveryLongitude = 28.9469,
+            VehicleType = VehicleType.Panelvan, Price = 8000m,
         };
+        open1.SetStops([
+            new JobStopInput(StopType.Pickup, "Gebze TLS", 40.8026, 29.4307, null),
+            new JobStopInput(StopType.Delivery, "Haliç Tersane", 41.0383, 28.9469, null),
+        ], now);
         open1.JobNumber = await numberGenerator.NextJobNumberAsync(today, ct);
-        open1.Initialize(admin.Id, assignee.Id, now);
+        open1.Initialize(admin.Id, assignee.Id, now, van.Id);
         var open2 = new TransportJob
         {
             CustomerId = calvin.Id, CreatedByUserId = admin.Id, JobDate = today.AddDays(1), StoreName = "Calvin Klein",
-            VehicleType = VehicleType.SmallPanelvan, PickupAddress = "Ümraniye Depo", DeliveryAddress = "Zorlu AVM", Description = "Ümraniye Depo - Zorlu AVM",
-            Price = 4000m,
+            VehicleType = VehicleType.SmallPanelvan, Price = 4000m,
         };
+        open2.SetStops([
+            new JobStopInput(StopType.Pickup, "Ümraniye Depo", null, null, null),
+            new JobStopInput(StopType.Pickup, "İkitelli YS Metal", null, null, null),
+            new JobStopInput(StopType.Delivery, "Zorlu AVM", null, null, null),
+        ], now);
         open2.JobNumber = await numberGenerator.NextJobNumberAsync(today, ct);
         open2.Initialize(admin.Id, null, now);
         db.TransportJobs.AddRange(open1, open2);

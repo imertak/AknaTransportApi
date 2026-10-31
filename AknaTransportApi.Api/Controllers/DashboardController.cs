@@ -21,6 +21,14 @@ public sealed class DashboardController(IDashboardService dashboardService) : Ap
     public async Task<ActionResult<BaseResponse<IReadOnlyList<MonthlyRevenueDto>>>> MonthlyRevenue([FromQuery] int months = 12, CancellationToken ct = default) =>
         Success(await dashboardService.GetMonthlyRevenueAsync(months, ct));
 
+    /// <summary>
+    /// Aylık nakliye geliri. year ve month verilmezse içinde bulunulan ay (Europe/Istanbul) kullanılır.
+    /// Yalnızca tamamlanmış işler, iş tarihine göre toplanır; iptal edilenler dahil değildir.
+    /// </summary>
+    [HttpGet("revenue")]
+    public async Task<ActionResult<BaseResponse<MonthRevenueSummaryDto>>> Revenue([FromQuery] int? year, [FromQuery] int? month, CancellationToken ct) =>
+        Success(await dashboardService.GetRevenueAsync(year, month, ct));
+
     [HttpGet("recent-jobs")]
     public async Task<ActionResult<BaseResponse<IReadOnlyList<JobDto>>>> RecentJobs([FromQuery] int count = 10, CancellationToken ct = default) =>
         Success(await dashboardService.GetRecentJobsAsync(count, ct));

@@ -19,6 +19,7 @@ public static class DependencyInjection
         services.AddScoped<IInvoiceService, InvoiceService>();
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<IVehicleService, VehicleService>();
         services.AddScoped<IOutboxProcessor, OutboxProcessor>();
 
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly, includeInternalTypes: false);

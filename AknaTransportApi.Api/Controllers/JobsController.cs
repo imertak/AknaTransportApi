@@ -61,7 +61,7 @@ public sealed class JobsController(IJobService jobService, ILocationService loca
     /// <summary>Yönetici işi kendi üzerine alır (Accepted).</summary>
     [HttpPatch("{id:guid}/claim")]
     [Authorize(Policy = Policies.AdminOnly)]
-    public async Task<ActionResult<BaseResponse<JobDetailDto>>> Claim(Guid id, [FromBody] JobActionRequest? request, CancellationToken ct) =>
+    public async Task<ActionResult<BaseResponse<JobDetailDto>>> Claim(Guid id, [FromBody] ClaimJobRequest? request, CancellationToken ct) =>
         Success(await jobService.ClaimAsync(id, request ?? new(), ct), "İş üstlenildi.");
 
     /// <summary>Assigned → Accepted</summary>

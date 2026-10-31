@@ -12,6 +12,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider c
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<TransportJob> TransportJobs => Set<TransportJob>();
     public DbSet<JobStatusHistory> JobStatusHistories => Set<JobStatusHistory>();
+    public DbSet<TransportJobStop> TransportJobStops => Set<TransportJobStop>();
+    public DbSet<Vehicle> Vehicles => Set<Vehicle>();
+    public DbSet<DriverVehicle> DriverVehicles => Set<DriverVehicle>();
     public DbSet<Location> Locations => Set<Location>();
     public DbSet<JobLatestLocation> JobLatestLocations => Set<JobLatestLocation>();
     public DbSet<JobTrackingToken> JobTrackingTokens => Set<JobTrackingToken>();

@@ -18,7 +18,7 @@ public sealed class ReportService(
         var items = await q.OrderBy(j => j.JobDate).ThenBy(j => j.CreatedAt)
             .Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize)
             .Select(j => new JobReportItemDto(j.Id, j.JobNumber, j.JobDate, j.CustomerId, j.Customer!.CompanyName, j.StoreName, j.VehicleType,
-                j.Description, j.Price, j.Currency, j.Status, j.AssignedDriver != null ? j.AssignedDriver.FullName : null))
+                (j.RouteDescription == "" ? j.Description : j.Description == "" ? j.RouteDescription : j.RouteDescription + " (" + j.Description + ")"), j.Price, j.Currency, j.Status, j.AssignedDriver != null ? j.AssignedDriver.FullName : null))
             .ToListAsync(ct);
 
         var paged = new PagedResult<JobReportItemDto> { Items = items, PageNumber = query.PageNumber, PageSize = query.PageSize, TotalCount = totals?.Count ?? 0 };
@@ -51,7 +51,7 @@ public sealed class ReportService(
         if (count > MaxPdfRows) throw new BusinessValidationException($"Rapor {count} iş içeriyor. PDF için en fazla {MaxPdfRows} iş desteklenir; tarih aralığını daraltın.");
 
         var rows = await q.OrderBy(j => j.JobDate).ThenBy(j => j.CreatedAt)
-            .Select(j => new JobReportRow(j.JobDate, j.StoreName, j.VehicleType, j.Description, j.Price, j.Customer!.CompanyName))
+            .Select(j => new JobReportRow(j.JobDate, j.StoreName, j.VehicleType, (j.RouteDescription == "" ? j.Description : j.Description == "" ? j.RouteDescription : j.RouteDescription + " (" + j.Description + ")"), j.Price, j.Customer!.CompanyName))
             .ToListAsync(ct);
 
         string? customerName = null;

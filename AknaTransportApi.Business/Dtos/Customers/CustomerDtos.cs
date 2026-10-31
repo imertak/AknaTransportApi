@@ -49,3 +49,14 @@ public sealed record CustomerSummaryDto(
     IReadOnlyList<InvoiceListItemDto> Invoices);
 
 public sealed record CustomerDeleteResult(bool Deleted, bool Deactivated, string Message);
+
+/// <summary>Müşterinin geçmiş işlerinde kullanılmış adres (yeni iş formunda öneri olarak).</summary>
+public sealed record CustomerAddressDto(StopType StopType, string Address, double? Latitude, double? Longitude, int UseCount, DateTime LastUsedAt);
+
+public sealed class CustomerAddressQuery
+{
+    /// <summary>Boşsa hem yükleme hem teslimat adresleri döner.</summary>
+    public StopType? StopType { get; set; }
+    public string? Search { get; set; }
+    public int Limit { get; set; } = 30;
+}

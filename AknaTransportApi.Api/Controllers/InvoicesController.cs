@@ -65,6 +65,11 @@ public sealed class InvoicesController(IInvoiceService invoiceService) : ApiCont
     [Produces("application/pdf", "application/json")]
     public async Task<IActionResult> Pdf(Guid id, CancellationToken ct) => Pdf(await invoiceService.GetPdfAsync(id, ct));
 
+    /// <summary>Faturadaki işlerin nakliye dökümü PDF'i (adresler yükleme → teslimat sırasıyla).</summary>
+    [HttpGet("{id:guid}/job-report/pdf")]
+    [Produces("application/pdf", "application/json")]
+    public async Task<IActionResult> JobReportPdf(Guid id, CancellationToken ct) => Pdf(await invoiceService.GetJobReportPdfAsync(id, ct));
+
     [HttpGet("{id:guid}/jobs")]
     public async Task<ActionResult<BaseResponse<IReadOnlyList<JobDto>>>> Jobs(Guid id, CancellationToken ct) =>
         Success(await invoiceService.GetJobsAsync(id, ct));

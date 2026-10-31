@@ -21,3 +21,20 @@ public sealed class UpdateLocationRequestValidator : AbstractValidator<UpdateLoc
         }).OverridePropertyName("points");
     }
 }
+
+public sealed class DriverLocationRequestValidator : AbstractValidator<DriverLocationRequest>
+{
+    public DriverLocationRequestValidator()
+    {
+        RuleFor(x => x.Points).NotEmpty().WithMessage("En az bir konum gönderilmelidir.")
+            .Must(p => p.Count <= 200).WithMessage("Tek istekte en fazla 200 konum gönderilebilir.");
+        RuleForEach(x => x.Points).ChildRules(p =>
+        {
+            p.RuleFor(x => x.Latitude).InclusiveBetween(-90, 90).WithMessage("Enlem -90 ile 90 arasında olmalıdır.");
+            p.RuleFor(x => x.Longitude).InclusiveBetween(-180, 180).WithMessage("Boylam -180 ile 180 arasında olmalıdır.");
+            p.RuleFor(x => x.Accuracy).GreaterThanOrEqualTo(0);
+            p.RuleFor(x => x.Speed).GreaterThanOrEqualTo(0);
+            p.RuleFor(x => x.Heading).InclusiveBetween(0, 360);
+        });
+    }
+}
