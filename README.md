@@ -89,6 +89,14 @@ dotnet ef migrations script --idempotent -o migrate.sql \
   --project src/AknaTransport.Infrastructure --startup-project src/AknaTransport.Infrastructure
 ```
 
+Hazır şema betiği `database/akna_transport_schema.sql` dosyasındadır. Boş bir PostgreSQL veritabanına doğrudan uygulanabilir ve tekrar çalıştırmak güvenlidir:
+
+```bash
+psql -h localhost -U akna -d akna_transport -f database/akna_transport_schema.sql
+```
+
+Betik yalnızca tabloları, index'leri ve sequence'leri oluşturur. İlk yönetici (`Seed:AdminEmail` / `Seed:AdminPassword`) ve Development'taki örnek veriler API ilk açıldığında eklenir. Yeni bir migration eklendiğinde betik yukarıdaki `migrations script` komutuyla yeniden üretilmelidir.
+
 Alternatif olarak `Database__ApplyMigrationsOnStartup=true` ile uygulama açılışta bekleyen migration'ları uygular (Development'ta varsayılan açık, üretimde kapalı).
 
 Veritabanı notları:
@@ -317,7 +325,19 @@ Sahte (fake) bir sağlayıcı üretim koduna eklenmemiştir. Testlerdeki sahte a
 
 ## Mobil uygulama entegrasyonu
 
-Mobil uygulamadaki `src/services/registry.ts` dosyası mock servislerin gerçek API ile değiştirileceği noktadır. API servisleri `src/services/http.ts` istemcisini kullanmalı ve yanıtlardaki `data` alanını açmalıdır (`http.ts` hata durumunda zaten `message` alanını okuyor).
+Mobil uygulama `EXPO_PUBLIC_API_BASE_URL` tanımlandığında bu API'yi kullanır (`src/services/api/*`). Değişken boşsa cihaz üzerindeki demo verilerle çalışır. Yerelde:
+
+```bash
+# API (Development, port 5080). Telefon/emülatörden erişilecekse tüm arayüzlerde dinletin:
+dotnet run --project src/AknaTransport.Api --urls http://0.0.0.0:5080
+
+# Mobil uygulama (ayrı terminal, AknaTransportNative kökünde)
+echo "EXPO_PUBLIC_API_BASE_URL=http://localhost:5080" > .env.local   # web / iOS simülatör
+# Android emülatör: http://10.0.2.2:5080 · Gerçek cihaz: http://<bilgisayarın-LAN-IP'si>:5080
+npx expo start
+```
+
+Development'ta CORS tüm kaynaklara açıktır; üretimde `Cors__AllowedOrigins__0` ile web adresi tanımlanmalıdır. Fatura listesi (`GET /api/invoices`) mobil liste ekranı için `firstJobId`, `firstJobNumber`, `description` ve `customerEmail` alanlarını da döner.
 
 ### Enum değerleri
 
