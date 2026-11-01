@@ -69,7 +69,7 @@ dotnet run
 
 Swagger: <http://localhost:5080/swagger>. Sağlık kontrolü: `GET /health`.
 
-Development örnek verisi: Starbucks, Calvin Klein ve Bestseller müşterileri ile 19–22 Ekim 2026 tarihli 7 tamamlanmış iş (toplam 36.500 TL), ayrıca harita denemesi için 2 açık iş. `Seed:DemoUserPassword` verilirse `ahmet.sofor@akna.local` ve `mehmet.sofor@akna.local` şoför hesapları da oluşturulur. Örnek veri **yalnızca Development** ortamında ve `Seed:DemoData=true` iken oluşur.
+Development örnek verisi (isteğe bağlı): Starbucks, Calvin Klein ve Bestseller müşterileri ile 19–22 Ekim 2026 tarihli 7 tamamlanmış iş (toplam 36.500 TL), ayrıca harita denemesi için 2 açık iş. `Seed:DemoUserPassword` verilirse `ahmet.sofor@akna.local` ve `mehmet.sofor@akna.local` şoför hesapları da oluşturulur. Örnek veri varsayılan olarak **kapalıdır**; yalnızca Development ortamında `Seed:DemoData=true` verilirse ve müşteri tablosu boşken oluşur. Mevcut kayıtlara dokunmaz.
 
 İlk yönetici hesabı her ortamda, sistemde aktif yönetici yoksa `Seed:AdminEmail` ve `Seed:AdminPassword` değerleriyle oluşturulur. Şifre kaynak kodda yoktur.
 
