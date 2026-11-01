@@ -6,11 +6,12 @@ internal static class PdfFormat
 {
     public static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
 
-    /// <summary>36.500,00 TL biçimi.</summary>
-    public static string Money(decimal value, string currency = "TRY")
+    /// <summary>36.500,00 TL biçimi; <paramref name="decimals"/> false ise kuruşsuz tutarlarda 4.000 TL.</summary>
+    public static string Money(decimal value, string currency = "TRY", bool decimals = true)
     {
         var suffix = currency == "TRY" ? "TL" : currency;
-        return value.ToString("#,##0.00", Turkish) + " " + suffix;
+        var format = decimals || decimal.Truncate(value) != value ? "#,##0.00" : "#,##0";
+        return value.ToString(format, Turkish) + " " + suffix;
     }
 
     public static string Date(DateOnly date) => date.ToString("dd.MM.yyyy", Turkish);
