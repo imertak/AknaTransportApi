@@ -9,6 +9,7 @@ public sealed class JobService(
     IRepository<User> users,
     IRepository<DriverVehicle> driverVehicles,
     ICustomerService customerService,
+    IVehicleTypeService vehicleTypes,
     INumberGenerator numberGenerator,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
@@ -58,6 +59,7 @@ public sealed class JobService(
         var driverId = request.AssignToMe ? currentUser.UserId : request.AssignedDriverId;
         if (driverId is { } d && d != currentUser.UserId) await EnsureAssignableDriverAsync(d, ct);
         if (driverId is { } owner && request.AssignedVehicleId is { } vehicleId) await EnsureDriverVehicleAsync(owner, vehicleId, ct);
+        await vehicleTypes.EnsureSelectableAsync(request.VehicleType, null, ct);
 
         var jobId = await unitOfWork.ExecuteInTransactionAsync(async token =>
         {
@@ -97,6 +99,7 @@ public sealed class JobService(
         EnsureAdmin();
         var job = await jobs.Query().Include(j => j.Stops).Include(j => j.Contacts).FirstOrDefaultAsync(j => j.Id == id, ct) ?? throw NotFoundException.For("İş");
         job.EnsureEditable();
+        await vehicleTypes.EnsureSelectableAsync(request.VehicleType, job.VehicleType, ct);
         if (job.CustomerId != request.CustomerId) await customerService.EnsureExistsAsync(request.CustomerId, ct);
         job.CustomerId = request.CustomerId;
         job.Apply(request);

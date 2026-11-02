@@ -765,5 +765,73 @@ BEGIN
     VALUES ('20261102171101_AddJobContacts', '9.0.10');
     END IF;
 END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261102181431_AddVehicleTypes') THEN
+    ALTER TABLE vehicles ALTER COLUMN "VehicleType" TYPE character varying(50);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261102181431_AddVehicleTypes') THEN
+    ALTER TABLE transport_jobs ALTER COLUMN "VehicleType" TYPE character varying(50);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261102181431_AddVehicleTypes') THEN
+    CREATE TABLE vehicle_types (
+        "Id" uuid NOT NULL,
+        "Code" character varying(50) NOT NULL,
+        "Name" character varying(100) NOT NULL,
+        "SortOrder" integer NOT NULL,
+        "IsActive" boolean NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_vehicle_types" PRIMARY KEY ("Id")
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261102181431_AddVehicleTypes') THEN
+    INSERT INTO vehicle_types ("Id", "Code", "CreatedAt", "IsActive", "Name", "SortOrder", "UpdatedAt")
+    VALUES ('0193a000-0000-7000-8000-000000000001', 'Panelvan', TIMESTAMPTZ '2026-11-02T00:00:00Z', TRUE, 'Panelvan', 10, NULL);
+    INSERT INTO vehicle_types ("Id", "Code", "CreatedAt", "IsActive", "Name", "SortOrder", "UpdatedAt")
+    VALUES ('0193a000-0000-7000-8000-000000000002', 'SmallPanelvan', TIMESTAMPTZ '2026-11-02T00:00:00Z', TRUE, 'Küçük Panelvan', 20, NULL);
+    INSERT INTO vehicle_types ("Id", "Code", "CreatedAt", "IsActive", "Name", "SortOrder", "UpdatedAt")
+    VALUES ('0193a000-0000-7000-8000-000000000003', 'Pickup', TIMESTAMPTZ '2026-11-02T00:00:00Z', TRUE, 'Kamyonet', 30, NULL);
+    INSERT INTO vehicle_types ("Id", "Code", "CreatedAt", "IsActive", "Name", "SortOrder", "UpdatedAt")
+    VALUES ('0193a000-0000-7000-8000-000000000004', 'Truck', TIMESTAMPTZ '2026-11-02T00:00:00Z', TRUE, 'Kamyon', 40, NULL);
+    INSERT INTO vehicle_types ("Id", "Code", "CreatedAt", "IsActive", "Name", "SortOrder", "UpdatedAt")
+    VALUES ('0193a000-0000-7000-8000-000000000005', 'Other', TIMESTAMPTZ '2026-11-02T00:00:00Z', TRUE, 'Diğer', 90, NULL);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261102181431_AddVehicleTypes') THEN
+    CREATE UNIQUE INDEX "IX_vehicle_types_Code" ON vehicle_types ("Code");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261102181431_AddVehicleTypes') THEN
+    CREATE UNIQUE INDEX "IX_vehicle_types_Name" ON vehicle_types ("Name");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261102181431_AddVehicleTypes') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261102181431_AddVehicleTypes', '9.0.10');
+    END IF;
+END $EF$;
 COMMIT;
 

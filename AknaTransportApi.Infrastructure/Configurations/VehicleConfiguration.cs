@@ -12,7 +12,7 @@ public sealed class VehicleConfiguration : IEntityTypeConfiguration<Vehicle>
         b.Property(x => x.PlateNumber).HasMaxLength(20).IsRequired();
         b.Property(x => x.Brand).HasMaxLength(100);
         b.Property(x => x.Model).HasMaxLength(100);
-        b.Property(x => x.VehicleType).HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.VehicleType).HasMaxLength(50).IsRequired();
         b.Property(x => x.Description).HasMaxLength(500);
         b.HasIndex(x => x.PlateNumber).IsUnique();
         b.HasIndex(x => x.IsActive);

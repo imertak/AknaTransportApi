@@ -6,6 +6,7 @@ public sealed class ReportService(
     IRepository<TransportJob> jobs,
     IRepository<Customer> customers,
     IJobReportPdfGenerator pdfGenerator,
+    IVehicleTypeService vehicleTypes,
     TimeProvider clock) : IReportService
 {
     /// <summary>PDF için üst sınır; daha büyük aralıklar daraltılmalıdır.</summary>
@@ -33,13 +34,14 @@ public sealed class ReportService(
             .ToListAsync(ct);
         var byVehicle = await q.GroupBy(j => j.VehicleType).Select(g => new { g.Key, Count = g.Count(), Amount = g.Sum(j => j.Price) }).ToListAsync(ct);
         var byStatus = await q.GroupBy(j => j.Status).Select(g => new { g.Key, Count = g.Count(), Amount = g.Sum(j => j.Price) }).ToListAsync(ct);
+        var labels = await vehicleTypes.GetLabelsAsync(ct);
         var byDay = await q.GroupBy(j => j.JobDate).Select(g => new { g.Key, Count = g.Count(), Amount = g.Sum(j => j.Price) }).ToListAsync(ct);
 
         return new JobReportSummaryDto(
             query.StartDate, query.EndDate, query.Scope,
             byStatus.Sum(x => x.Count), byStatus.Sum(x => x.Amount),
             byCustomer.OrderByDescending(x => x.Amount).Select(x => new GroupTotalDto(x.CustomerId.ToString(), x.CompanyName, x.Count, x.Amount)).ToList(),
-            byVehicle.OrderByDescending(x => x.Amount).Select(x => new GroupTotalDto(x.Key.ToString(), x.Key.ToTurkish(), x.Count, x.Amount)).ToList(),
+            byVehicle.OrderByDescending(x => x.Amount).Select(x => new GroupTotalDto(x.Key, labels.GetValueOrDefault(x.Key, x.Key), x.Count, x.Amount)).ToList(),
             byStatus.OrderBy(x => x.Key).Select(x => new GroupTotalDto(x.Key.ToString(), x.Key.ToString(), x.Count, x.Amount)).ToList(),
             byDay.OrderBy(x => x.Key).Select(x => new GroupTotalDto(x.Key.ToString("yyyy-MM-dd"), x.Key.ToString("dd.MM.yyyy"), x.Count, x.Amount)).ToList());
     }
@@ -53,6 +55,7 @@ public sealed class ReportService(
         var rows = await q.OrderBy(j => j.JobDate).ThenBy(j => j.CreatedAt)
             .Select(j => new JobReportRow(j.JobDate, j.StoreName, j.VehicleType, (j.RouteDescription == "" ? j.Description : j.Description == "" ? j.RouteDescription : j.RouteDescription + " (" + j.Description + ")"), j.Price, j.Customer!.CompanyName))
             .ToListAsync(ct);
+        rows = await WithVehicleLabelsAsync(rows, ct);
 
         string? customerName = null;
         if (query.CustomerId is { } customerId)
@@ -77,6 +80,13 @@ public sealed class ReportService(
             _ => "tum-zamanlar",
         };
         return new FileDownload(pdf, $"akna-is-dokumu-{range}.pdf");
+    }
+
+    /// <summary>PDF'te araç tipinin kodu yerine yöneticinin verdiği ad yazılır.</summary>
+    private async Task<List<JobReportRow>> WithVehicleLabelsAsync(List<JobReportRow> rows, CancellationToken ct)
+    {
+        var labels = await vehicleTypes.GetLabelsAsync(ct);
+        return rows.Select(r => r with { VehicleType = labels.GetValueOrDefault(r.VehicleType, r.VehicleType) }).ToList();
     }
 
     private IQueryable<TransportJob> Filter(JobReportQuery query)

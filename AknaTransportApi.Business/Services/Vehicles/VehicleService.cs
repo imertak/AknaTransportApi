@@ -12,6 +12,7 @@ public sealed class VehicleService(
     IRepository<Vehicle> vehicles,
     IRepository<DriverVehicle> assignments,
     IRepository<User> users,
+    IVehicleTypeService vehicleTypes,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
     TimeProvider clock,
@@ -49,6 +50,7 @@ public sealed class VehicleService(
     public async Task<VehicleDto> CreateAsync(VehicleRequest request, CancellationToken ct)
     {
         EnsureAdmin();
+        await vehicleTypes.EnsureSelectableAsync(request.VehicleType, null, ct);
         var vehicle = new Vehicle { IsActive = true };
         vehicle.Apply(request);
         await EnsurePlateAvailableAsync(vehicle.PlateNumber, null, ct);
@@ -62,6 +64,7 @@ public sealed class VehicleService(
     {
         EnsureAdmin();
         var vehicle = await vehicles.GetByIdAsync(id, ct) ?? throw NotFoundException.For("Araç");
+        await vehicleTypes.EnsureSelectableAsync(request.VehicleType, vehicle.VehicleType, ct);
         vehicle.Apply(request);
         await EnsurePlateAvailableAsync(vehicle.PlateNumber, id, ct);
         // Pasife alınan araç mevcut işlerde kalır ama yeni işlere atanamaz.

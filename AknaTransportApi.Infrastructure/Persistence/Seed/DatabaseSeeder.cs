@@ -95,7 +95,7 @@ public sealed class DatabaseSeeder(
             new DriverVehicle { DriverId = vehicleOwner.Id, VehicleId = smallVan.Id, AssignedAt = now, AssignedByUserId = admin.Id });
 
         // Yükleme noktaları '|' ile ayrılır; açıklama alanı yalnızca elle yazılan ek bilgidir.
-        var rows = new (DateOnly Date, Customer Customer, VehicleType Vehicle, string Pickups, string Delivery, string Description, decimal Price)[]
+        var rows = new (DateOnly Date, Customer Customer, string Vehicle, string Pickups, string Delivery, string Description, decimal Price)[]
         {
             (new(2026, 10, 19), starbucks, VehicleType.Panelvan, "Portashelf", "Haliç Tersane", "", 4000m),
             (new(2026, 10, 19), starbucks, VehicleType.Panelvan, "Gebze TLS", "Haliç Tersane", "", 8000m),

@@ -19,13 +19,17 @@ public enum JobStatus
     Cancelled = 7,
 }
 
-public enum VehicleType
+/// <summary>
+/// Hazır araç tiplerinin kodları. Araç tipleri artık yönetici tarafından eklenebilir (vehicle_types tablosu);
+/// iş ve araç kayıtları tipin kodunu (ör. "Panelvan") metin olarak saklar. Bu sabitler ilk kurulumda gelen tiplerdir.
+/// </summary>
+public static class VehicleType
 {
-    Panelvan = 0,
-    SmallPanelvan = 1,
-    Pickup = 2,
-    Truck = 3,
-    Other = 4,
+    public const string Panelvan = "Panelvan";
+    public const string SmallPanelvan = "SmallPanelvan";
+    public const string Pickup = "Pickup";
+    public const string Truck = "Truck";
+    public const string Other = "Other";
 }
 
 public enum InvoiceStatus

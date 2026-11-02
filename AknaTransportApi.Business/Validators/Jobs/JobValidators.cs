@@ -10,7 +10,7 @@ public abstract class JobRequestBaseValidator<T> : AbstractValidator<T> where T 
             .Must(d => d.Year is >= 2000 and <= 2100).WithMessage("Geçerli bir iş tarihi girin.");
         // Mağaza adı isteğe bağlıdır; firma adı müşteriden gelir.
         RuleFor(x => x.StoreName).MaximumLength(200);
-        RuleFor(x => x.VehicleType).IsInEnum().WithMessage("Geçerli bir araç tipi seçin.");
+        RuleFor(x => x.VehicleType).Cascade(CascadeMode.Stop).NotEmpty().WithMessage("Araç tipini seçin.").MaximumLength(50);
         RuleFor(x => x).Must(x => x.ResolveStops().Any(s => s.StopType == StopType.Pickup))
             .WithName("stops").WithMessage("En az bir yükleme adresi girin.");
         RuleFor(x => x).Must(x => x.ResolveStops().Any(s => s.StopType == StopType.Delivery))

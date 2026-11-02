@@ -11,7 +11,7 @@ public sealed class VehicleRequestValidator : AbstractValidator<VehicleRequest>
             .Matches(@"^\s*\d{2}\s*[A-Za-zÇĞİÖŞÜçğıöşü]{1,3}\s*\d{2,5}\s*$").WithMessage("Geçerli bir plaka girin (ör. 34 ABC 123).");
         RuleFor(x => x.Brand).MaximumLength(100);
         RuleFor(x => x.Model).MaximumLength(100);
-        RuleFor(x => x.VehicleType).IsInEnum().WithMessage("Geçerli bir araç tipi seçin.");
+        RuleFor(x => x.VehicleType).Cascade(CascadeMode.Stop).NotEmpty().WithMessage("Araç tipini seçin.").MaximumLength(50);
         RuleFor(x => x.Description).MaximumLength(500);
     }
 }
