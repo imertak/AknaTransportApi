@@ -56,6 +56,31 @@ public class InvoiceTests(AknaApiFactory factory) : IClassFixture<AknaApiFactory
     }
 
     [Fact]
+    public async Task Admin_can_invoice_unfinished_job_but_not_cancelled_one()
+    {
+        var admin = await _client.AdminTokenAsync();
+        var customer = await _client.CreateCustomerAsync(admin);
+
+        // Henüz kabul edilmemiş (atanmış) iş faturalanabilir.
+        var open = await _client.CreateJobAsync(admin, customer.Id, assignToMe: true);
+        var invoice = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest { JobIds = [open.Job.Id] }, admin);
+        Assert.Equal(4800m, invoice.GrandTotal);
+
+        // Faturalanan iş yürümeye devam eder ve tamamlanabilir; ancak iptal edilemez.
+        var (cancelInvoiced, _) = await _client.SendAsync<JobDetailDto>(HttpMethod.Patch, $"/api/jobs/{open.Job.Id}/cancel", new CancelJobRequest { Reason = "Test" }, admin);
+        Assert.NotEqual(HttpStatusCode.OK, cancelInvoiced);
+        var done = await _client.RunToCompletionAsync(open.Job.Id, admin);
+        Assert.Equal(JobStatus.Completed, done.Job.Status);
+
+        // İptal edilmiş iş faturalanamaz.
+        var cancelled = await _client.CreateJobAsync(admin, customer.Id, assignToMe: true);
+        await _client.OkAsync<JobDetailDto>(HttpMethod.Patch, $"/api/jobs/{cancelled.Job.Id}/cancel", new CancelJobRequest { Reason = "Test" }, admin);
+        var (status, body) = await _client.SendAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest { JobIds = [cancelled.Job.Id] }, admin);
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Contains(body!.Errors!, e => e.Message.Contains("iptal edildiği için faturalanamaz", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Invoice_list_includes_job_and_description_for_mobile_list()
     {
         var (admin, customerId, jobId) = await CompletedJobAsync();
@@ -68,16 +93,6 @@ public class InvoiceTests(AknaApiFactory factory) : IClassFixture<AknaApiFactory
         Assert.Equal(invoice.Items[0].JobNumber, item.FirstJobNumber);
         Assert.Equal("Ekim taşımaları", item.Description);
         Assert.Equal(invoice.CustomerEmail, item.CustomerEmail);
-    }
-
-    [Fact]
-    public async Task Uncompleted_job_cannot_be_invoiced()
-    {
-        var admin = await _client.AdminTokenAsync();
-        var customer = await _client.CreateCustomerAsync(admin);
-        var job = await _client.CreateJobAsync(admin, customer.Id);
-        var (status, _) = await _client.SendAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest { JobIds = [job.Job.Id] }, admin);
-        Assert.Equal(HttpStatusCode.BadRequest, status);
     }
 
     [Fact]
