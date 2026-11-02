@@ -22,10 +22,11 @@ public sealed class ResendEmailService(HttpClient http, IOptions<EmailOptions> o
     {
         if (!IsConfigured) throw new InvalidOperationException("E-posta sağlayıcısı yapılandırılmamış (Email:ResendApiKey / Email:FromEmail).");
 
+        var cc = _options.CcFor(message);
         var payload = new ResendRequest(
             From: string.IsNullOrWhiteSpace(_options.FromName) ? _options.FromEmail! : $"{_options.FromName} <{_options.FromEmail}>",
             To: [message.To],
-            Cc: message.Cc.Count == 0 ? null : message.Cc,
+            Cc: cc.Count == 0 ? null : cc,
             Subject: message.Subject,
             Html: message.HtmlBody,
             Text: message.TextBody,

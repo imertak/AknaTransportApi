@@ -58,4 +58,14 @@ public class ResendEmailServiceTests
 
     [Fact]
     public void Not_configured_without_api_key() => Assert.False(Create(new CaptureHandler(HttpStatusCode.OK, "{}"), apiKey: null).IsConfigured);
+
+    [Fact]
+    public void AlwaysCc_is_added_once_and_never_duplicates_recipient()
+    {
+        var options = new EmailOptions { AlwaysCc = "imertakpinar0@gmail.com; Muhasebe@firma.com" };
+        var message = new EmailMessage("muhasebe@firma.com", null, "Konu", "<p>x</p>", "x", []) { Cc = ["satin@firma.com", "IMERTAKPINAR0@gmail.com"] };
+
+        Assert.Equal(["satin@firma.com", "IMERTAKPINAR0@gmail.com"], options.CcFor(message));
+        Assert.Equal(["imertakpinar0@gmail.com"], new EmailOptions { AlwaysCc = "imertakpinar0@gmail.com" }.CcFor(message with { Cc = [] }));
+    }
 }

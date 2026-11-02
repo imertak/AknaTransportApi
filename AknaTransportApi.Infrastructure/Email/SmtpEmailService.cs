@@ -22,7 +22,7 @@ public sealed class SmtpEmailService(IOptions<EmailOptions> options, ILogger<Smt
         var mime = new MimeMessage();
         mime.From.Add(new MailboxAddress(_options.FromName, _options.FromEmail!));
         mime.To.Add(new MailboxAddress(message.ToName ?? message.To, message.To));
-        foreach (var cc in message.Cc) mime.Cc.Add(MailboxAddress.Parse(cc));
+        foreach (var cc in _options.CcFor(message)) mime.Cc.Add(MailboxAddress.Parse(cc));
         mime.Subject = message.Subject;
 
         var body = new BodyBuilder { HtmlBody = message.HtmlBody, TextBody = message.TextBody };

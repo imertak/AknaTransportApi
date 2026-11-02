@@ -126,7 +126,8 @@ Veritabanı notları:
 | `Seed__AdminEmail`, `Seed__AdminPassword` | İlk kurulumda | Aktif yönetici yoksa oluşturulur |
 | `Email__Provider` | Fatura e-postası için | `Resend` veya `Smtp` (varsayılan) |
 | `Email__ResendApiKey` | Resend için | Resend panelinden alınan API anahtarı (`re_...`). `Email__FromEmail` adresinin alan adı Resend'de doğrulanmış olmalıdır. |
-| `Email__Host`, `Email__Port`, `Email__Username`, `Email__Password`, `Email__FromEmail`, `Email__FromName` | Fatura e-postası için | `Email__FromEmail` / `Email__FromName` her iki sağlayıcıda kullanılır; diğerleri yalnızca SMTP. `Email__Security`: Auto / StartTls / SslOnConnect / None |
+| `Email__Host`, `Email__Port`, `Email__Username`, `Email__Password`, `Email__FromEmail`, `Email__FromName` | Fatura e-postası için | `Email__FromEmail` / `Email__FromName` her iki sağlayıcıda kullanılır; diğerleri yalnızca SMTP. `Email__Security`: Auto / StartTls / SslOnConnect / None. Gmail: `smtp.gmail.com`, 587, `StartTls`, kullanıcı ve gönderen Gmail adresi, şifre Google hesabındaki **uygulama şifresi** (2 adımlı doğrulama açık olmalı). |
+| `Email__AlwaysCc` | Hayır | Her gönderilen e-postaya CC olarak eklenen adres(ler), `;` ile ayrılır. Varsayılan `imertakpinar0@gmail.com`. |
 | `Sms__Provider`, `Sms__ApiUrl`, `Sms__Username`, `Sms__Password`, `Sms__ApiKey`, `Sms__Sender` | SMS için | Bkz. [SMS](#sms-ile-kullanıcı-şifresi) |
 | `EArchive__Provider` | Gerçek fatura için | `GibPortal` (GİB e-Arşiv portalı, yerleşik) veya eklenen özel entegratörün adı. Boşsa e-Arşiv kapalıdır. |
 | `EArchive__Username`, `EArchive__Password` | GİB portalı için | e-Arşiv portalı kullanıcı kodu ve şifresi (İnteraktif Vergi Dairesi'nden alınır). |

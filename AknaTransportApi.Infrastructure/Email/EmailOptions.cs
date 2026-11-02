@@ -1,3 +1,5 @@
+using AknaTransportApi.Business.Dtos.Integrations;
+
 namespace AknaTransportApi.Infrastructure.Email;
 
 /// <summary>
@@ -26,6 +28,17 @@ public sealed class EmailOptions
     /// <summary>Auto (önerilen), SslOnConnect, StartTls, None.</summary>
     public string Security { get; set; } = "Auto";
     public int TimeoutSeconds { get; set; } = 30;
+    /// <summary>Her gönderilen e-postaya CC olarak eklenen adresler (';' veya ',' ile ayrılmış). Alıcıda zaten varsa tekrar eklenmez.</summary>
+    public string? AlwaysCc { get; set; }
+
+    /// <summary>Mesajın CC listesine <see cref="AlwaysCc"/> adreslerini ekler; alıcı ve tekrar eden adresler çıkarılır.</summary>
+    public IReadOnlyList<string> CcFor(EmailMessage message)
+    {
+        var extra = (AlwaysCc ?? string.Empty).Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { message.To.Trim() };
+        return message.Cc.Concat(extra).Select(a => a.Trim()).Where(a => a.Length > 0 && seen.Add(a)).ToList();
+    }
+
     /// <summary>Yalnızca geliştirme: e-postaları bu klasöre .eml olarak yazar.</summary>
     public string? PickupDirectory { get; set; }
 }
