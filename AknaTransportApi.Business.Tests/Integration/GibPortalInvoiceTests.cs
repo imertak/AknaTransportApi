@@ -263,6 +263,9 @@ public class GibPortalInvoiceTests(GibPortalApiFactory factory) : IClassFixture<
         var gibPdf = System.Text.Encoding.UTF8.GetString(mail.Attachments.First(a => a.FileName.StartsWith("e-Arsiv_Fatura_")).Content);
         Assert.StartsWith("%PDF", gibPdf);
         Assert.Contains($"e-Arşiv fatura {issued.EArchiveReference}", gibPdf);
+        // AKNA logosu belgenin önüne eklenir; GİB içeriği aynen kalır.
+        Assert.Contains("<svg", gibPdf);
+        Assert.True(gibPdf.IndexOf("<svg", StringComparison.Ordinal) < gibPdf.IndexOf("e-Arşiv fatura", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -283,5 +286,24 @@ public class GibPortalInvoiceTests(GibPortalApiFactory factory) : IClassFixture<
         {
             factory.HtmlPdf.Available = true;
         }
+    }
+
+    [Fact]
+    public async Task Portal_draft_pdf_comes_from_gib_with_logo()
+    {
+        var (admin, jobId) = await CompletedJobAsync();
+        var pending = await IssuedDraftAsync(admin, jobId);
+        Assert.Equal(InvoiceStatus.Pending, pending.Status);
+
+        var pdf = await _client.SendAsync(new HttpRequestMessage(HttpMethod.Get, $"/api/invoices/{pending.Id}/pdf") { Headers = { { "Authorization", $"Bearer {admin}" } } });
+        Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);
+        Assert.StartsWith("TASLAK-", pdf.Content.Headers.ContentDisposition!.FileNameStar ?? pdf.Content.Headers.ContentDisposition.FileName);
+        var content = await pdf.Content.ReadAsStringAsync();
+        Assert.Contains($"e-Arşiv fatura {pending.EArchiveReference}", content);
+        Assert.Contains("<svg", content);
+
+        // Portal taslağı saklanmaz; fatura hâlâ beklemede.
+        var still = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Get, $"/api/invoices/{pending.Id}", token: admin);
+        Assert.Equal(InvoiceStatus.Pending, still.Status);
     }
 }

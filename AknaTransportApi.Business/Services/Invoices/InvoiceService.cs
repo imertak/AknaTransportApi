@@ -340,6 +340,25 @@ public sealed class InvoiceService(
             return new FileDownload(bytes, $"Fatura-{SafeName(invoice.EArchiveInvoiceNumber ?? invoice.InvoiceNumber)}.pdf");
         }
 
+        // GİB portalında imza bekleyen taslak: portaldaki taslak görüntüsü logo eklenerek PDF'e çevrilir.
+        // Taslak değişebileceği ve silinebileceği için saklanmaz. Portala ulaşılamazsa veya tarayıcı yoksa
+        // "resmi fatura değildir" ibareli kendi önizlememiz üretilir.
+        if (invoice.Status == InvoiceStatus.Pending && invoice.EArchiveReference is not null && eArchive.IsConfigured && htmlPdf.IsAvailable)
+        {
+            try
+            {
+                if (await LoadEArchiveHtmlAsync(invoice, ct) is { } portalDraft)
+                {
+                    var draft = await htmlPdf.RenderAsync(EArchiveDocumentBranding.AddLogo(System.Text.Encoding.UTF8.GetString(portalDraft.Content)), ct);
+                    return new FileDownload(draft, $"TASLAK-{SafeName(invoice.EArchiveInvoiceNumber ?? invoice.InvoiceNumber)}.pdf");
+                }
+            }
+            catch (IntegrationUnavailableException ex)
+            {
+                logger.LogWarning(ex, "GİB taslağı PDF'e çevrilemedi; önizleme PDF'i üretiliyor. InvoiceId: {InvoiceId}", invoice.Id);
+            }
+        }
+
         // Kesilmemiş faturalar için "resmi fatura değildir" ibareli önizleme üretilir.
         var pdf = await RenderPdfAsync(invoice, official: false, ct);
         return new FileDownload(pdf, $"TASLAK-{SafeName(invoice.InvoiceNumber)}.pdf");
@@ -394,7 +413,7 @@ public sealed class InvoiceService(
         {
             try
             {
-                var pdf = await htmlPdf.RenderAsync(System.Text.Encoding.UTF8.GetString(original.Content), ct);
+                var pdf = await htmlPdf.RenderAsync(EArchiveDocumentBranding.AddLogo(System.Text.Encoding.UTF8.GetString(original.Content)), ct);
                 return new(await CacheOfficialPdfAsync(invoice, pdf, ct), FromProvider: true);
             }
             catch (IntegrationUnavailableException ex)
