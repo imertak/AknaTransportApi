@@ -163,4 +163,47 @@ public class GibPortalInvoiceTests(GibPortalApiFactory factory) : IClassFixture<
         var detail = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Get, $"/api/invoices/{pending.Id}", token: admin);
         Assert.Equal(InvoiceStatus.Issued, detail.Status);
     }
+
+    [Fact]
+    public async Task Interrupted_send_is_failed_by_sync_and_can_be_resent()
+    {
+        var (admin, jobId) = await CompletedJobAsync();
+        var invoice = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest { JobIds = [jobId], NoWithholding = true }, admin);
+
+        // API gönderim sırasında durdu: fatura Pending, sağlayıcı referansı yok.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.Invoices.Where(i => i.Id == invoice.Id).ExecuteUpdateAsync(s => s
+                .SetProperty(i => i.Status, InvoiceStatus.Pending)
+                .SetProperty(i => i.EArchiveProvider, "GibPortal")
+                .SetProperty(i => i.UpdatedAt, DateTime.UtcNow.AddMinutes(-1)));
+        }
+
+        // Tekrar gönderim anlaşılır bir mesajla reddedilir.
+        var again = await _client.SendAsync(new HttpRequestMessage(HttpMethod.Post, $"/api/invoices/{invoice.Id}/issue") { Headers = { Authorization = new("Bearer", admin) } });
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+        Assert.Contains("zaten e-Arşiv'e gönderiliyor", await again.Content.ReadAsStringAsync());
+
+        // Eşik dolmadan senkronizasyon dokunmaz.
+        using (var scope = factory.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<IInvoiceService>().SyncPendingAsync(CancellationToken.None);
+        Assert.Equal(InvoiceStatus.Pending, (await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Get, $"/api/invoices/{invoice.Id}", token: admin)).Status);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.Invoices.Where(i => i.Id == invoice.Id).ExecuteUpdateAsync(s => s.SetProperty(i => i.UpdatedAt, DateTime.UtcNow.AddMinutes(-10)));
+            await scope.ServiceProvider.GetRequiredService<IInvoiceService>().SyncPendingAsync(CancellationToken.None);
+        }
+
+        var failed = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Get, $"/api/invoices/{invoice.Id}", token: admin);
+        Assert.Equal(InvoiceStatus.Failed, failed.Status);
+        Assert.Contains("yarıda kaldı", failed.LastError);
+        Assert.Null(failed.IssuedAt);
+
+        var resent = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{invoice.Id}/issue", token: admin);
+        Assert.Equal(InvoiceStatus.Pending, resent.Status);
+        Assert.NotNull(resent.EArchiveReference);
+    }
 }
