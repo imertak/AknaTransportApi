@@ -266,6 +266,8 @@ public class GibPortalInvoiceTests(GibPortalApiFactory factory) : IClassFixture<
         // AKNA logosu belgenin önüne eklenir; GİB içeriği aynen kalır.
         Assert.Contains("<svg", gibPdf);
         Assert.True(gibPdf.IndexOf("<svg", StringComparison.Ordinal) < gibPdf.IndexOf("e-Arşiv fatura", StringComparison.Ordinal));
+        // Tarayıcıda logo karekodun altına taşınır (karekod yoksa üstte kalır).
+        Assert.Contains("getElementById('qrcode')", gibPdf);
     }
 
     [Fact]
