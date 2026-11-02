@@ -78,6 +78,9 @@ public class TransportJob : Entity, IHasTimestamps
     /// <summary>Yükleme ve teslimat noktaları. Yalnızca <see cref="SetStops"/> ile değiştirilir.</summary>
     public ICollection<TransportJobStop> Stops { get; set; } = new List<TransportJobStop>();
 
+    /// <summary>Yetkili kişiler (yük sahibi, teslim alan vb.). Yalnızca <see cref="SetContacts"/> ile değiştirilir.</summary>
+    public ICollection<TransportJobContact> Contacts { get; set; } = new List<TransportJobContact>();
+
     public bool IsClosed => Status is JobStatus.Completed or JobStatus.Cancelled;
     public bool IsTrackable => TrackableStatuses.Contains(Status);
 
@@ -185,6 +188,31 @@ public class TransportJob : Entity, IHasTimestamps
         DeliveryLongitude = lastDelivery.Longitude;
         RouteDescription = BuildRouteDescription(pickups.Concat(deliveries).Select(s => s.Address));
     }
+
+    /// <summary>Yetkili kişi listesini verilen sırayla değiştirir. Telefonsuz kişi kabul edilmez.</summary>
+    public void SetContacts(IReadOnlyList<JobContactInput> contacts, DateTime now)
+    {
+        if (contacts.Count > TransportJobContact.MaxPerJob)
+            throw new DomainException($"Bir işe en fazla {TransportJobContact.MaxPerJob} yetkili kişi eklenebilir.");
+        if (contacts.Any(c => string.IsNullOrWhiteSpace(c.PhoneNumber))) throw new DomainException("Yetkili kişinin telefonu boş olamaz.");
+        Contacts.Clear();
+        var sequence = 1;
+        foreach (var c in contacts)
+        {
+            Contacts.Add(new TransportJobContact
+            {
+                TransportJobId = Id,
+                Role = TrimTo(c.Role, TransportJobContact.RoleMaxLength),
+                Name = TrimTo(c.Name, TransportJobContact.NameMaxLength),
+                PhoneNumber = Truncate(c.PhoneNumber.Trim(), TransportJobContact.PhoneMaxLength),
+                Sequence = sequence++,
+                CreatedAt = now,
+            });
+        }
+    }
+
+    private static string? TrimTo(string? value, int max) =>
+        string.IsNullOrWhiteSpace(value) ? null : Truncate(value.Trim(), max);
 
     /// <summary>Önce yükleme, sonra teslimat adreslerini " - " ile birleştirir.</summary>
     public static string BuildRouteDescription(IEnumerable<string> orderedAddresses) =>

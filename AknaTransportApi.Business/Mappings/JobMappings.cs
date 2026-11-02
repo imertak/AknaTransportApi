@@ -19,7 +19,8 @@ public static class JobMappings
         j.AssignedVehicleId,
         j.AssignedVehicle != null ? j.AssignedVehicle.PlateNumber : null,
         j.InvoiceId == null ? JobBillingStatus.NotInvoiced
-            : j.Invoice!.Status == InvoiceStatus.Issued ? JobBillingStatus.Invoiced : JobBillingStatus.InDraft);
+            : j.Invoice!.Status == InvoiceStatus.Issued ? JobBillingStatus.Invoiced : JobBillingStatus.InDraft,
+        j.Contacts.OrderBy(c => c.Sequence).Select(c => new JobContactDto(c.Id, c.Sequence, c.Role, c.Name, c.PhoneNumber)).ToList());
 
     /// <summary>PDF ve fatura satırları için iş metni: otomatik güzergâh + elle yazılan açıklama.</summary>
     public static string ComposeText(string routeDescription, string description) =>

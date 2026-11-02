@@ -713,6 +713,44 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
                     b.ToTable("transport_jobs", (string)null);
                 });
 
+            modelBuilder.Entity("AknaTransportApi.Domain.Entities.TransportJobContact", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Role")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TransportJobId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TransportJobId", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("transport_job_contacts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_transport_job_contacts_sequence", "\"Sequence\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("AknaTransportApi.Domain.Entities.TransportJobStop", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1052,6 +1090,17 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
                     b.Navigation("Invoice");
                 });
 
+            modelBuilder.Entity("AknaTransportApi.Domain.Entities.TransportJobContact", b =>
+                {
+                    b.HasOne("AknaTransportApi.Domain.Entities.TransportJob", "TransportJob")
+                        .WithMany("Contacts")
+                        .HasForeignKey("TransportJobId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TransportJob");
+                });
+
             modelBuilder.Entity("AknaTransportApi.Domain.Entities.TransportJobStop", b =>
                 {
                     b.HasOne("AknaTransportApi.Domain.Entities.TransportJob", "TransportJob")
@@ -1077,6 +1126,8 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("AknaTransportApi.Domain.Entities.TransportJob", b =>
                 {
+                    b.Navigation("Contacts");
+
                     b.Navigation("StatusHistory");
 
                     b.Navigation("Stops");

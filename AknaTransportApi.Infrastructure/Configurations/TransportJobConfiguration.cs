@@ -40,6 +40,7 @@ public sealed class TransportJobConfiguration : IEntityTypeConfiguration<Transpo
         // Araç silinmez (pasife alınır); geçmiş işlerdeki araç bilgisi korunur.
         b.HasOne(x => x.AssignedVehicle).WithMany().HasForeignKey(x => x.AssignedVehicleId).OnDelete(DeleteBehavior.Restrict);
         b.HasMany(x => x.Stops).WithOne(s => s.TransportJob).HasForeignKey(s => s.TransportJobId).OnDelete(DeleteBehavior.Cascade);
+        b.HasMany(x => x.Contacts).WithOne(c => c.TransportJob).HasForeignKey(c => c.TransportJobId).OnDelete(DeleteBehavior.Cascade);
         b.HasMany(x => x.StatusHistory).WithOne(h => h.Job).HasForeignKey(h => h.JobId).OnDelete(DeleteBehavior.Cascade);
     }
 }
@@ -55,6 +56,20 @@ public sealed class JobStatusHistoryConfiguration : IEntityTypeConfiguration<Job
         b.Property(x => x.Description).HasMaxLength(1000);
         b.HasIndex(x => new { x.JobId, x.ChangedAt });
         b.HasOne(x => x.ChangedByUser).WithMany().HasForeignKey(x => x.ChangedByUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public sealed class TransportJobContactConfiguration : IEntityTypeConfiguration<TransportJobContact>
+{
+    public void Configure(EntityTypeBuilder<TransportJobContact> b)
+    {
+        b.ToTable("transport_job_contacts");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Role).HasMaxLength(TransportJobContact.RoleMaxLength);
+        b.Property(x => x.Name).HasMaxLength(TransportJobContact.NameMaxLength);
+        b.Property(x => x.PhoneNumber).HasMaxLength(TransportJobContact.PhoneMaxLength).IsRequired();
+        b.HasIndex(x => new { x.TransportJobId, x.Sequence }).IsUnique();
+        b.ToTable(t => t.HasCheckConstraint("CK_transport_job_contacts_sequence", "\"Sequence\" > 0"));
     }
 }
 

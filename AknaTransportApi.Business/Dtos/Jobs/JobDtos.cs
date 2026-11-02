@@ -38,7 +38,12 @@ public sealed record JobDto(
     Guid? AssignedVehicleId,
     string? AssignedVehiclePlate,
     // Fatura durumundan türetilir: NotInvoiced, InDraft, Invoiced.
-    JobBillingStatus BillingStatus);
+    JobBillingStatus BillingStatus,
+    // Yetkili kişiler (yük sahibi, teslim alan vb.).
+    IReadOnlyList<JobContactDto> Contacts);
+
+/// <summary>İşin yetkili kişisi.</summary>
+public sealed record JobContactDto(Guid Id, int Sequence, string? Role, string? Name, string PhoneNumber);
 
 /// <summary>İşin yükleme veya teslimat noktası.</summary>
 public sealed record JobStopDto(Guid Id, StopType StopType, int Sequence, string Address, double? Latitude, double? Longitude, string? Description);
@@ -61,6 +66,14 @@ public sealed class JobStopRequest
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
     public string? Description { get; set; }
+}
+
+public sealed class JobContactRequest
+{
+    /// <summary>"Yük sahibi", "Teslim alan" gibi serbest metin.</summary>
+    public string? Role { get; set; }
+    public string? Name { get; set; }
+    public string PhoneNumber { get; set; } = string.Empty;
 }
 
 public class JobRequestBase
@@ -88,6 +101,15 @@ public class JobRequestBase
     public string? Description { get; set; }
     public decimal Price { get; set; }
     public string? Notes { get; set; }
+
+    /// <summary>
+    /// Yetkili kişiler, gönderildiği sırayla. Güncellemede null gönderilirse mevcut liste korunur,
+    /// boş liste tüm kişileri siler.
+    /// </summary>
+    public List<JobContactRequest>? Contacts { get; set; }
+
+    public IReadOnlyList<JobContactInput> ResolveContacts() =>
+        (Contacts ?? []).Select(c => new JobContactInput(c.Role, c.Name, c.PhoneNumber)).ToList();
 
     /// <summary>Stops veya eski tekli adres alanlarından durak listesini üretir.</summary>
     public IReadOnlyList<JobStopInput> ResolveStops()

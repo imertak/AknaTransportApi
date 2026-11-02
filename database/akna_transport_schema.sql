@@ -682,5 +682,88 @@ BEGIN
     VALUES ('20261031214543_AddJobStopsAndVehicles', '9.0.10');
     END IF;
 END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261031231031_AddInvoiceWithholdingAndIban') THEN
+    ALTER TABLE invoices ADD "Iban" character varying(34);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261031231031_AddInvoiceWithholdingAndIban') THEN
+    ALTER TABLE invoices ADD "PayableAmount" numeric(18,2) NOT NULL DEFAULT 0.0;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261031231031_AddInvoiceWithholdingAndIban') THEN
+    ALTER TABLE invoices ADD "WithholdingAmount" numeric(18,2) NOT NULL DEFAULT 0.0;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261031231031_AddInvoiceWithholdingAndIban') THEN
+    ALTER TABLE invoices ADD "WithholdingCode" character varying(10);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261031231031_AddInvoiceWithholdingAndIban') THEN
+    ALTER TABLE invoices ADD "WithholdingRate" numeric(5,2) NOT NULL DEFAULT 0.0;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261031231031_AddInvoiceWithholdingAndIban') THEN
+    UPDATE invoices SET "PayableAmount" = "GrandTotal";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261031231031_AddInvoiceWithholdingAndIban') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261031231031_AddInvoiceWithholdingAndIban', '9.0.10');
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261102171101_AddJobContacts') THEN
+    CREATE TABLE transport_job_contacts (
+        "Id" uuid NOT NULL,
+        "TransportJobId" uuid NOT NULL,
+        "Role" character varying(50),
+        "Name" character varying(100),
+        "PhoneNumber" character varying(20) NOT NULL,
+        "Sequence" integer NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        CONSTRAINT "PK_transport_job_contacts" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_transport_job_contacts_sequence" CHECK ("Sequence" > 0),
+        CONSTRAINT "FK_transport_job_contacts_transport_jobs_TransportJobId" FOREIGN KEY ("TransportJobId") REFERENCES transport_jobs ("Id") ON DELETE CASCADE
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261102171101_AddJobContacts') THEN
+    CREATE UNIQUE INDEX "IX_transport_job_contacts_TransportJobId_Sequence" ON transport_job_contacts ("TransportJobId", "Sequence");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261102171101_AddJobContacts') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261102171101_AddJobContacts', '9.0.10');
+    END IF;
+END $EF$;
 COMMIT;
 

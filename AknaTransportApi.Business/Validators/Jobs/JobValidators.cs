@@ -17,6 +17,9 @@ public abstract class JobRequestBaseValidator<T> : AbstractValidator<T> where T 
         RuleFor(x => x.Stops!.Count).LessThanOrEqualTo(30).When(x => x.Stops is not null)
             .OverridePropertyName("stops").WithMessage("Bir işte en fazla 30 durak olabilir.");
         RuleForEach(x => x.Stops).SetValidator(new JobStopRequestValidator()).When(x => x.Stops is not null);
+        RuleFor(x => x.Contacts!.Count).LessThanOrEqualTo(TransportJobContact.MaxPerJob).When(x => x.Contacts is not null)
+            .OverridePropertyName("contacts").WithMessage($"Bir işe en fazla {TransportJobContact.MaxPerJob} yetkili kişi eklenebilir.");
+        RuleForEach(x => x.Contacts).SetValidator(new JobContactRequestValidator()).When(x => x.Contacts is not null);
         RuleFor(x => x.PickupAddress).MaximumLength(TransportJobStop.AddressMaxLength);
         RuleFor(x => x.DeliveryAddress).MaximumLength(TransportJobStop.AddressMaxLength);
         RuleFor(x => x.Description).MaximumLength(1000);
@@ -32,6 +35,19 @@ public abstract class JobRequestBaseValidator<T> : AbstractValidator<T> where T 
             .WithMessage("Yükleme konumu için enlem ve boylam birlikte gönderilmelidir.");
         RuleFor(x => x).Must(x => (x.DeliveryLatitude is null) == (x.DeliveryLongitude is null))
             .WithMessage("Teslimat konumu için enlem ve boylam birlikte gönderilmelidir.");
+    }
+}
+
+public sealed class JobContactRequestValidator : AbstractValidator<JobContactRequest>
+{
+    public JobContactRequestValidator()
+    {
+        RuleFor(x => x.PhoneNumber).Cascade(CascadeMode.Stop)
+            .NotEmpty().WithMessage("Yetkili kişinin telefonunu girin.")
+            .MaximumLength(TransportJobContact.PhoneMaxLength)
+            .Matches(@"^\+?[0-9 ()\-]{7,20}$").WithMessage("Geçerli bir telefon numarası girin.");
+        RuleFor(x => x.Role).MaximumLength(TransportJobContact.RoleMaxLength);
+        RuleFor(x => x.Name).MaximumLength(TransportJobContact.NameMaxLength);
     }
 }
 
