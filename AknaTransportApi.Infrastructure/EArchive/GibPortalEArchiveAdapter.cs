@@ -40,6 +40,16 @@ public sealed class GibPortalEArchiveAdapter : IEArchiveSmsSigningAdapter
         var baseUrl = !string.IsNullOrWhiteSpace(_options.ApiUrl) ? _options.ApiUrl : _options.UseTestEnvironment ? TestUrl : ProductionUrl;
         _http.BaseAddress ??= new Uri(baseUrl.TrimEnd('/') + "/");
         _http.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
+        // GİB portalının önündeki güvenlik katmanı tarayıcı başlığı olmayan istekleri yanıtsız bırakabiliyor;
+        // portal web arayüzünün gönderdiği başlıklar eklenir.
+        if (_http.DefaultRequestHeaders.UserAgent.Count == 0)
+        {
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "*/*");
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("Accept-Language", "tr-TR,tr;q=0.9");
+            _http.DefaultRequestHeaders.Referrer = new Uri(_http.BaseAddress, "intragiris.html");
+        }
         _cache = cache;
         _calendar = calendar;
         _clock = clock;

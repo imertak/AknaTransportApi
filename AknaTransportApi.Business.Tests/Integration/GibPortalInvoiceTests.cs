@@ -206,4 +206,30 @@ public class GibPortalInvoiceTests(GibPortalApiFactory factory) : IClassFixture<
         Assert.Equal(InvoiceStatus.Pending, resent.Status);
         Assert.NotNull(resent.EArchiveReference);
     }
+
+    [Fact]
+    public async Task Portal_timeout_marks_invoice_failed_instead_of_pending()
+    {
+        var (admin, jobId) = await CompletedJobAsync();
+        factory.Portal.SimulateTimeout = true;
+        try
+        {
+            var result = await IssuedDraftAsync(admin, jobId, withholding: null);
+            Assert.Equal(InvoiceStatus.Failed, result.Status);
+            Assert.Contains("zaman aşımı", result.LastError);
+            Assert.Null(result.EArchiveReference);
+        }
+        finally
+        {
+            factory.Portal.SimulateTimeout = false;
+        }
+    }
+
+    [Fact]
+    public async Task Portal_requests_carry_browser_headers()
+    {
+        var (admin, jobId) = await CompletedJobAsync();
+        await IssuedDraftAsync(admin, jobId, withholding: null);
+        Assert.Contains("Mozilla/5.0", factory.Portal.LastUserAgent);
+    }
 }
