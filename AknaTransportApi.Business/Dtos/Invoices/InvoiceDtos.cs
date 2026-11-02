@@ -84,7 +84,9 @@ public sealed record InvoiceDetailDto(
     /// Faturada/e-Arşiv notunda yer alan tam açıklama (yazıyla tutar + IBAN + not).
     string DocumentNote,
     /// true: fatura sağlayıcıda taslak olarak bekliyor, SMS koduyla imzalanması gerekiyor (GİB portalı).
-    bool RequiresSmsSignature);
+    bool RequiresSmsSignature,
+    /// Elle gönderilen son e-posta ("E-posta gönder"; taslak faturalar dahil).
+    InvoiceEmailDto? ManualEmail = null);
 
 public sealed record WithholdingTypeDto(string Code, int Rate, string Fraction, string Name);
 

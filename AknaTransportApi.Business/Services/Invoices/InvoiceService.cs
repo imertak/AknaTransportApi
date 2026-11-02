@@ -66,6 +66,10 @@ public sealed class InvoiceService(
         var email = await emailLogs.QueryAsNoTracking().Where(e => e.InvoiceId == id && e.Type == EmailType.InvoiceDelivery)
             .Select(e => new InvoiceEmailDto(e.Id, e.RecipientEmail, e.Subject, e.Status, e.AttemptCount, e.LastError, e.SentAt, e.CreatedAt))
             .FirstOrDefaultAsync(ct);
+        var manualEmail = await emailLogs.QueryAsNoTracking().Where(e => e.InvoiceId == id && e.Type == EmailType.InvoiceManual)
+            .OrderByDescending(e => e.CreatedAt)
+            .Select(e => new InvoiceEmailDto(e.Id, e.RecipientEmail, e.Subject, e.Status, e.AttemptCount, e.LastError, e.SentAt, e.CreatedAt))
+            .FirstOrDefaultAsync(ct);
 
         var i = header.Invoice;
         var withholding = WithholdingTypes.Find(i.WithholdingCode);
@@ -74,7 +78,7 @@ public sealed class InvoiceService(
             i.VatAmount, i.GrandTotal, i.Currency, i.Status, i.Status == InvoiceStatus.Issued, i.Notes, i.EArchiveProvider, i.EArchiveReference,
             i.EArchiveInvoiceNumber, i.EArchiveInvoiceUrl, i.LastError, i.CreatedByUserId, i.IssuedAt, i.CancelledAt, i.CreatedAt, i.UpdatedAt, items, email,
             i.WithholdingCode, withholding?.Name, i.WithholdingRate, i.WithholdingAmount, i.PayableAmount, i.AmountInWordsText,
-            i.Iban is null ? null : Iban.Format(i.Iban), i.Iban is null ? null : appOptions.Value.CompanyBankName.TrimOrNull(), ComposeDocumentNote(i), requiresSms);
+            i.Iban is null ? null : Iban.Format(i.Iban), i.Iban is null ? null : appOptions.Value.CompanyBankName.TrimOrNull(), ComposeDocumentNote(i), requiresSms, manualEmail);
     }
 
     public IReadOnlyList<WithholdingTypeDto> GetWithholdingTypes() =>
@@ -293,6 +297,34 @@ public sealed class InvoiceService(
         log.LastError = null;
         OutboxWriter.Enqueue(outbox, OutboxMessageTypes.InvoiceEmail, new InvoiceEmailPayload(id, log.Id), now);
         await unitOfWork.SaveChangesAsync(ct);
+        return await GetAsync(id, ct);
+    }
+
+    public async Task<InvoiceDetailDto> SendEmailAsync(Guid id, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow().UtcDateTime;
+        var invoice = await invoices.QueryAsNoTracking().Where(i => i.Id == id).Select(i => new { i.Status, i.CustomerId, i.InvoiceNumber })
+                          .FirstOrDefaultAsync(ct) ?? throw NotFoundException.For("Fatura");
+        if (invoice.Status == InvoiceStatus.Cancelled) throw new ConflictException("İptal edilmiş faturanın e-postası gönderilemez.");
+
+        // Çift tıklamaya karşı: kuyrukta bekleyen elle gönderim varsa yenisi eklenmez.
+        if (await emailLogs.QueryAsNoTracking().AnyAsync(e => e.InvoiceId == id && e.Type == EmailType.InvoiceManual && e.Status == EmailStatus.Pending, ct))
+            throw new ConflictException("Bu faturanın e-postası zaten gönderim kuyruğunda.");
+
+        var customer = await LoadCustomerForInvoiceAsync(invoice.CustomerId, ct);
+        var log = new EmailLog
+        {
+            InvoiceId = id,
+            Type = EmailType.InvoiceManual,
+            RecipientEmail = RecipientList(customer),
+            Subject = invoice.Status == InvoiceStatus.Issued ? EmailTemplates.InvoiceSubject : EmailTemplates.DraftInvoiceSubject(invoice.InvoiceNumber),
+            Status = EmailStatus.Pending,
+            CreatedAt = now,
+        };
+        emailLogs.Add(log);
+        OutboxWriter.Enqueue(outbox, OutboxMessageTypes.InvoiceEmail, new InvoiceEmailPayload(id, log.Id), now);
+        await unitOfWork.SaveChangesAsync(ct);
+        logger.LogInformation("Fatura e-postası elle kuyruğa alındı. InvoiceId: {InvoiceId}, Status: {Status}", id, invoice.Status);
         return await GetAsync(id, ct);
     }
 

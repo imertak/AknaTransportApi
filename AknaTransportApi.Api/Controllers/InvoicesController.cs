@@ -99,6 +99,11 @@ public sealed class InvoicesController(IInvoiceService invoiceService) : ApiCont
     public async Task<ActionResult<BaseResponse<InvoiceDetailDto>>> ResendEmail(Guid id, CancellationToken ct) =>
         Success(await invoiceService.ResendEmailAsync(id, ct), "E-posta yeniden gönderim kuyruğuna alındı.");
 
+    /// <summary>Faturayı iş dökümüyle müşteriye e-postayla gönderir (taslak faturalar dahil; taslak olduğu e-postada belirtilir).</summary>
+    [HttpPost("{id:guid}/send-email")]
+    public async Task<ActionResult<BaseResponse<InvoiceDetailDto>>> SendEmail(Guid id, CancellationToken ct) =>
+        Success(await invoiceService.SendEmailAsync(id, ct), "E-posta gönderim kuyruğuna alındı.");
+
     /// <summary>Kesilmiş faturada resmi e-Arşiv PDF'i; taslakta "resmi değildir" ibareli önizleme.</summary>
     [HttpGet("{id:guid}/pdf")]
     [Produces("application/pdf", "application/json")]

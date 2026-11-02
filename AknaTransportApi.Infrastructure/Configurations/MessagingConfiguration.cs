@@ -14,8 +14,9 @@ public sealed class EmailLogConfiguration : IEntityTypeConfiguration<EmailLog>
         b.Property(x => x.RecipientEmail).HasMaxLength(2200).IsRequired();
         b.Property(x => x.Subject).HasMaxLength(300).IsRequired();
         b.Property(x => x.LastError).HasMaxLength(2000);
-        // Fatura başına tek e-posta kaydı: mükerrer gönderim veritabanı seviyesinde engellenir.
-        b.HasIndex(x => x.InvoiceId).IsUnique();
+        // Fatura başına tek otomatik (kesilince giden) e-posta kaydı: mükerrer gönderim veritabanı seviyesinde engellenir.
+        // Elle gönderimler (InvoiceManual) birden fazla olabilir.
+        b.HasIndex(x => x.InvoiceId).IsUnique().HasFilter("\"Type\" = 'InvoiceDelivery'");
         b.HasIndex(x => new { x.Status, x.CreatedAt });
         b.HasOne(x => x.Invoice).WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
     }

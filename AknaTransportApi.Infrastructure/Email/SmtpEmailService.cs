@@ -11,7 +11,8 @@ public sealed class SmtpEmailService(IOptions<EmailOptions> options, ILogger<Smt
 {
     private readonly EmailOptions _options = options.Value;
 
-    private bool UsePickup => !string.IsNullOrWhiteSpace(_options.PickupDirectory);
+    // Host tanımlıysa gerçek gönderim yapılır; pickup klasörü yalnızca SMTP sunucusu verilmemişken (yerel geliştirme) kullanılır.
+    private bool UsePickup => !string.IsNullOrWhiteSpace(_options.PickupDirectory) && string.IsNullOrWhiteSpace(_options.Host);
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_options.FromEmail) && (UsePickup || !string.IsNullOrWhiteSpace(_options.Host));
 

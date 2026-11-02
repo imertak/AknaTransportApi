@@ -28,6 +28,9 @@ public interface IInvoiceService
     IReadOnlyList<WithholdingTypeDto> GetWithholdingTypes();
     Task<InvoiceDetailDto> CancelAsync(Guid id, CancelInvoiceRequest request, CancellationToken ct);
     Task<InvoiceDetailDto> ResendEmailAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Faturayı (taslak veya kesilmiş) iş dökümüyle birlikte müşteriye e-postayla gönderir. Taslakta "resmi fatura değildir" ibareli PDF eklenir; fatura durumu değişmez.</summary>
+    Task<InvoiceDetailDto> SendEmailAsync(Guid id, CancellationToken ct);
     Task<FileDownload> GetPdfAsync(Guid id, CancellationToken ct);
 
     /// <summary>Gerçek e-Arşiv PDF'ini depodan veya sağlayıcıdan getirir (yalnızca Issued).</summary>
