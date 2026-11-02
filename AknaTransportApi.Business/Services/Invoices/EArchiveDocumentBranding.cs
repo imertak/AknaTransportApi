@@ -2,7 +2,7 @@ namespace AknaTransportApi.Business.Services.Invoices;
 
 /// <summary>
 /// GİB portalındaki fatura görüntüsünü PDF'e çevirmeden önce AKNA logosunu ekler. Logo, faturadaki karekodun hemen
-/// altına, karekodla aynı genişlikte ortalanarak yerleştirilir (karekodun altındaki boşluk). Karekod bulunamazsa
+/// altına, karekodla aynı genişlikte, sağ kenarı karekodun sağ kenarıyla hizalı yerleştirilir (karekodun altındaki boşluk). Karekod bulunamazsa
 /// sayfanın en üstüne ayrı bir satır olarak eklenir. Faturanın içeriğine ve alanlarına dokunulmaz.
 /// </summary>
 internal static class EArchiveDocumentBranding
@@ -34,11 +34,14 @@ internal static class EArchiveDocumentBranding
             }
             if (!qr || !qr.parentNode) return;
             var width = Math.round(qr.getBoundingClientRect().width) || 140;
-            logo.style.textAlign = 'center';
+            logo.style.textAlign = 'right';
             logo.style.margin = '4mm 0 0';
             logo.style.width = width + 'px';
             if (qr.parentNode.getAttribute && qr.parentNode.getAttribute('align') === 'right') logo.style.marginLeft = 'auto';
             qr.parentNode.insertBefore(logo, qr.nextSibling);
+            // Sağ kenarı karekodun sağ kenarına tam oturt (kapsayıcının hizalamasından bağımsız).
+            var delta = qr.getBoundingClientRect().right - logo.getBoundingClientRect().right;
+            if (Math.abs(delta) > 0.5) { logo.style.position = 'relative'; logo.style.left = delta + 'px'; }
           }
           if (document.readyState === 'complete') place(); else window.addEventListener('load', place);
         })();
