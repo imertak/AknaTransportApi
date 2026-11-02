@@ -196,6 +196,9 @@ public sealed class InvoiceService(
 
         var invoice = await invoices.Query().Include(i => i.Items).ThenInclude(x => x.Job)
                           .FirstOrDefaultAsync(i => i.Id == id, ct) ?? throw NotFoundException.For("Fatura");
+        if (invoice.Status == InvoiceStatus.Pending && invoice.EArchiveReference is null)
+            throw new ConflictException(
+                $"Fatura zaten e-Arşiv'e gönderiliyor. Yanıt gelmezse {StuckSendThreshold.TotalMinutes:0} dakika içinde başarısız işaretlenir ve yeniden gönderilebilir.");
         invoice.EnsureEditable();
         var customer = await LoadCustomerForInvoiceAsync(invoice.CustomerId, ct);
 
@@ -379,15 +382,21 @@ public sealed class InvoiceService(
         return new FileDownload(jobReportPdf.Generate(report), $"Nakliye-Dokumu-{SafeName(number)}.pdf");
     }
 
+    /// <summary>
+    /// Sağlayıcıdan referans dönmeden yarıda kalan gönderimler bu süreden sonra başarısız sayılır.
+    /// Gönderim zaman aşımından (EArchive:TimeoutSeconds) belirgin şekilde uzun tutulur.
+    /// </summary>
+    internal static readonly TimeSpan StuckSendThreshold = TimeSpan.FromMinutes(5);
+
     public async Task<int> SyncPendingAsync(CancellationToken ct)
     {
         if (!eArchive.IsConfigured) return 0;
+        var changed = await FailInterruptedSendsAsync(ct);
         var threshold = clock.GetUtcNow().UtcDateTime.AddMinutes(-1);
         var pending = await invoices.Query()
             .Where(i => i.Status == InvoiceStatus.Pending && i.EArchiveReference != null && (i.UpdatedAt ?? i.CreatedAt) < threshold)
             .OrderBy(i => i.UpdatedAt).Take(50).ToListAsync(ct);
 
-        var changed = 0;
         foreach (var invoice in pending)
         {
             try
@@ -406,6 +415,27 @@ public sealed class InvoiceService(
             }
         }
         return changed;
+    }
+
+    /// <summary>
+    /// "Pending" yapılıp sağlayıcıdan hiç referans alınamamış faturalar (API gönderim sırasında durdu,
+    /// bağlantı koptu vb.) sonsuza kadar kilitli kalmasın diye başarısız işaretlenir; fatura düzenlenip
+    /// yeniden gönderilebilir. Kesilmiş sayılmaz: GİB'de yalnızca imzasız bir taslak oluşmuş olabilir.
+    /// Gönderim hâlâ sürüyorsa ConcurrencyStamp, geç gelen yanıtın bu kaydın üstüne yazılmasını engeller.
+    /// </summary>
+    private async Task<int> FailInterruptedSendsAsync(CancellationToken ct)
+    {
+        var threshold = clock.GetUtcNow().UtcDateTime - StuckSendThreshold;
+        var stuck = await invoices.Query()
+            .Where(i => i.Status == InvoiceStatus.Pending && i.EArchiveReference == null && (i.UpdatedAt ?? i.CreatedAt) < threshold)
+            .OrderBy(i => i.UpdatedAt).Take(50).ToListAsync(ct);
+        foreach (var invoice in stuck)
+        {
+            invoice.MarkFailed("Gönderim yarıda kaldı; e-Arşiv sağlayıcısından yanıt alınamadı. GİB portalında bu fatura için imzasız bir taslak oluştuysa silin, ardından faturayı yeniden gönderin.");
+            logger.LogWarning("Yarıda kalan e-Arşiv gönderimi başarısız işaretlendi. InvoiceId: {InvoiceId}", invoice.Id);
+        }
+        if (stuck.Count > 0) await unitOfWork.SaveChangesAsync(ct);
+        return stuck.Count;
     }
 
     /// <summary>

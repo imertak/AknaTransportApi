@@ -336,6 +336,7 @@ Tamamlanan işler ─▶ POST /api/invoices (Draft) ─▶ POST /{id}/issue ─�
 - Fatura oluştururken müşterinin geçerli e-posta adresi zorunludur.
 - **Issued durumuna yalnızca gerçek e-Arşiv sağlayıcısının başarılı yanıtıyla geçilir.** Sağlayıcı yapılandırılmamışsa `issue` 503 döner ve fatura Draft kalır. Taslak faturanın PDF'i "TASLAK – resmi fatura değildir" filigranlıdır; yanıtta `isOfficial: false`.
 - Sağlayıcı faturayı asenkron işliyorsa fatura `Pending` kalır; `EArchiveStatusSyncWorker` 5 dakikada bir durumu sorgular.
+- Gönderim yarıda kalırsa (API durdu, bağlantı koptu) fatura sağlayıcı referansı olmadan `Pending` kalır. Aynı worker bu faturaları 5 dakika sonra `Failed` işaretler; fatura yeniden gönderilebilir. Bu sürede tekrar `issue` çağrısı 409 döner. GİB portalında imzasız fazladan taslak oluşmuşsa portaldan silinmelidir.
 - **Transactional outbox:** Fatura `Issued` olduğu anda `email_logs` ve `outbox_messages` kayıtları aynı `SaveChanges` içinde yazılır. HTTP isteği e-posta göndermeyi beklemez.
 - `OutboxWorker` mesajı koşullu UPDATE ile kilitler (çoklu sunucuda tek işleyici), üstel geri çekilmeyle (30 sn, 60 sn, 120 sn …) en fazla 5 kez dener, sonra `Failed` işaretler. `POST /api/invoices/{id}/resend-email` başarısız gönderimi yeniden kuyruğa alır.
 - Mail başarısız olsa da fatura durumu değişmez ve e-Arşiv'e yeniden gönderilmez.
