@@ -106,18 +106,26 @@ public sealed class OutboxProcessor(
         var invoicePdf = issued
             ? new EmailAttachment($"Fatura-{number}.pdf", await invoiceService.GetOfficialPdfAsync(payload.InvoiceId, ct))
             : new EmailAttachment($"Fatura_Taslagi_{invoice.InvoiceNumber}.pdf", (await invoiceService.GetPdfAsync(payload.InvoiceId, ct)).Content);
+        // Kesilmiş faturada GİB portalındaki orijinal belge (imzalı fatura görüntüsü) de eklenir. Portal geçici olarak
+        // yanıt vermezse istisna yükselir ve outbox yeniden dener; e-posta orijinal belge olmadan gitmez.
+        var original = issued ? await invoiceService.GetIssuedEArchiveDocumentAsync(payload.InvoiceId, ct) : null;
         var report = await invoiceService.BuildJobReportAsync(payload.InvoiceId, ct);
         var reportAttachment = new EmailAttachment($"Is_Dokumu_{invoice.InvoiceNumber}.pdf", reportPdf.Generate(report));
         var detail = await invoiceService.GetAsync(payload.InvoiceId, ct);
         var (html, text) = EmailTemplates.Invoice(new InvoiceEmailModel(
             detail.CustomerName, number, detail.InvoiceDate, detail.Items.Count, detail.SubTotal, detail.VatAmount,
             detail.WithholdingCode is null ? detail.GrandTotal : detail.PayableAmount, detail.Currency, detail.Iban, detail.BankName,
-            Draft: !issued, Attachments: [invoicePdf.FileName, reportAttachment.FileName]));
+            Draft: !issued, Attachments: original is null
+                ? [invoicePdf.FileName, reportAttachment.FileName]
+                : [original.FileName, invoicePdf.FileName, reportAttachment.FileName]));
 
         // Kayıtta alıcılar "; " ile ayrılır: ilki ana alıcı, diğerleri bilgi (CC).
         var recipients = log.RecipientEmail.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         await emailService.SendAsync(new EmailMessage(recipients[0], detail.CustomerName, log.Subject, html, text,
-            [invoicePdf, reportAttachment], IdempotencyKey: $"invoice-email-{log.Id:N}") { Cc = recipients.Skip(1).ToList() }, ct);
+            original is null
+                ? [EmailTemplates.Logo, invoicePdf, reportAttachment]
+                : [EmailTemplates.Logo, new EmailAttachment(original.FileName, original.Content, original.ContentType), invoicePdf, reportAttachment],
+            IdempotencyKey: $"invoice-email-{log.Id:N}") { Cc = recipients.Skip(1).ToList() }, ct);
 
         log.Status = EmailStatus.Sent;
         log.SentAt = clock.GetUtcNow().UtcDateTime;
@@ -138,7 +146,7 @@ public sealed class OutboxProcessor(
             .Replace("{token}", Uri.EscapeDataString(payload.Token), StringComparison.Ordinal)
             .Replace("{email}", Uri.EscapeDataString(payload.Email), StringComparison.Ordinal);
         var (html, text) = EmailTemplates.PasswordReset(payload.FullName, payload.Token, link, calendar.ToLocal(payload.ExpiresAt));
-        await emailService.SendAsync(new EmailMessage(payload.Email, payload.FullName, log.Subject, html, text, []), ct);
+        await emailService.SendAsync(new EmailMessage(payload.Email, payload.FullName, log.Subject, html, text, [EmailTemplates.Logo]), ct);
         log.Status = EmailStatus.Sent;
         log.SentAt = clock.GetUtcNow().UtcDateTime;
         log.LastError = null;

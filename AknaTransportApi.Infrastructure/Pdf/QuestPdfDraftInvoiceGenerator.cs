@@ -29,9 +29,11 @@ public sealed class QuestPdfDraftInvoiceGenerator(IBusinessCalendar calendar) : 
                 {
                     col.Item().Row(row =>
                     {
-                        row.RelativeItem().Column(c =>
+                        row.AutoItem().AlignMiddle().Element(c => PdfBrand.Logo(c, 80));
+                        row.ConstantItem(12);
+                        row.RelativeItem().AlignMiddle().Column(c =>
                         {
-                            c.Item().Text(d.CompanyName.ToUpper(PdfFormat.Turkish)).FontSize(18).Bold().LetterSpacing(0.08f);
+                            c.Item().Text(d.CompanyName.ToUpper(PdfFormat.Turkish)).FontSize(13).Bold().LetterSpacing(0.06f);
                             c.Item().Text(d.Official ? "e-ARŞİV FATURA" : "TASLAK FATURA").FontSize(11).SemiBold();
                             if (d.WithholdingLabel is not null) c.Item().Text("Fatura tipi: TEVKİFAT").FontSize(9);
                         });

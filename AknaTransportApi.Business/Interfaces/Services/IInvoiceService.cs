@@ -22,6 +22,12 @@ public interface IInvoiceService
     /// <summary>Sağlayıcıdaki imzalanmamış taslağı siler ve faturayı düzenlenebilir taslağa döndürür.</summary>
     Task<InvoiceDetailDto> DiscardEArchiveDraftAsync(Guid id, CancellationToken ct);
 
+    /// <summary>
+    /// Kesilmiş faturanın e-Arşiv sağlayıcısındaki orijinal belgesi (GİB portalında imzalı fatura görüntüsü, HTML).
+    /// Sağlayıcı belge görüntüsü vermiyorsa veya fatura kesilmemişse null.
+    /// </summary>
+    Task<FileDownload?> GetIssuedEArchiveDocumentAsync(Guid id, CancellationToken ct);
+
     /// <summary>Sağlayıcının belge görüntüsü (GİB portalı HTML).</summary>
     Task<FileDownload> GetEArchiveViewAsync(Guid id, CancellationToken ct);
 

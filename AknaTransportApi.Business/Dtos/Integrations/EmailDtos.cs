@@ -1,6 +1,10 @@
 namespace AknaTransportApi.Business.Dtos.Integrations;
 
-public sealed record EmailAttachment(string FileName, byte[] Content, string ContentType = "application/pdf");
+public sealed record EmailAttachment(string FileName, byte[] Content, string ContentType = "application/pdf")
+{
+    /// <summary>Doluysa ek, HTML içinde <c>cid:{ContentId}</c> ile gösterilen satır içi görseldir (ek listesinde görünmez).</summary>
+    public string? ContentId { get; init; }
+}
 
 /// <param name="IdempotencyKey">Aynı e-postanın yeniden denemede iki kez gitmemesi için (destekleyen sağlayıcılarda, ör. Resend).</param>
 public sealed record EmailMessage(string To, string? ToName, string Subject, string HtmlBody, string TextBody, IReadOnlyList<EmailAttachment> Attachments, string? IdempotencyKey = null)

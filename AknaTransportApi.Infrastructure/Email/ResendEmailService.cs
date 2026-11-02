@@ -32,7 +32,7 @@ public sealed class ResendEmailService(HttpClient http, IOptions<EmailOptions> o
             Text: message.TextBody,
             Attachments: message.Attachments.Count == 0
                 ? null
-                : message.Attachments.Select(a => new ResendAttachment(a.FileName, Convert.ToBase64String(a.Content), a.ContentType)).ToList());
+                : message.Attachments.Select(a => new ResendAttachment(a.FileName, Convert.ToBase64String(a.Content), a.ContentType, a.ContentId)).ToList());
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{_options.ResendApiUrl.TrimEnd('/')}/emails")
         {
@@ -60,5 +60,7 @@ public sealed class ResendEmailService(HttpClient http, IOptions<EmailOptions> o
 
     private sealed record ResendRequest(string From, IReadOnlyList<string> To, IReadOnlyList<string>? Cc, string Subject, string Html, string Text, IReadOnlyList<ResendAttachment>? Attachments);
 
-    private sealed record ResendAttachment(string Filename, string Content, [property: JsonPropertyName("content_type")] string ContentType);
+    /// <param name="ContentId">Satır içi görsel (HTML'de cid:...) için Resend'in content_id alanı.</param>
+    private sealed record ResendAttachment(string Filename, string Content, [property: JsonPropertyName("content_type")] string ContentType,
+        [property: JsonPropertyName("content_id")] string? ContentId = null);
 }

@@ -3,6 +3,10 @@
     <RootNamespace>AknaTransportApi.Business</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <!-- E-posta başlığındaki AKNA logosu (satır içi görsel, cid:akna-logo). -->
+    <EmbeddedResource Include="Resources\akna-logo.png" LogicalName="AknaTransportApi.Business.akna-logo.png" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\AknaTransportApi.Domain\AknaTransportApi.Domain.csproj" />
   </ItemGroup>
   <ItemGroup>

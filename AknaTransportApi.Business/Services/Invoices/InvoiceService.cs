@@ -556,9 +556,23 @@ public sealed class InvoiceService(
         if (invoice.EArchiveReference is null || invoice.Status is not (InvoiceStatus.Pending or InvoiceStatus.Issued))
             throw new ConflictException("Bu fatura için e-Arşiv belgesi yok.");
         if (!eArchive.IsConfigured) throw new IntegrationUnavailableException("e-Arşiv sağlayıcısı yapılandırılmamış.");
-        var html = await eArchive.GetHtmlAsync(Key(invoice), signed: invoice.Status == InvoiceStatus.Issued, ct)
-                   ?? throw new IntegrationUnavailableException($"{eArchive.ProviderName} belge görüntüsü sağlamıyor; PDF'i kullanın.");
-        return new FileDownload(System.Text.Encoding.UTF8.GetBytes(html), $"e-Arsiv-{SafeName(invoice.EArchiveInvoiceNumber ?? invoice.InvoiceNumber)}.html", "text/html; charset=utf-8");
+        return await LoadEArchiveHtmlAsync(invoice, ct)
+               ?? throw new IntegrationUnavailableException($"{eArchive.ProviderName} belge görüntüsü sağlamıyor; PDF'i kullanın.");
+    }
+
+    public async Task<FileDownload?> GetIssuedEArchiveDocumentAsync(Guid id, CancellationToken ct)
+    {
+        var invoice = await invoices.QueryAsNoTracking().FirstOrDefaultAsync(i => i.Id == id, ct) ?? throw NotFoundException.For("Fatura");
+        if (invoice.Status != InvoiceStatus.Issued || invoice.EArchiveReference is null || !eArchive.IsConfigured) return null;
+        return await LoadEArchiveHtmlAsync(invoice, ct);
+    }
+
+    private async Task<FileDownload?> LoadEArchiveHtmlAsync(Invoice invoice, CancellationToken ct)
+    {
+        var html = await eArchive.GetHtmlAsync(Key(invoice), signed: invoice.Status == InvoiceStatus.Issued, ct);
+        return html is null
+            ? null
+            : new FileDownload(System.Text.Encoding.UTF8.GetBytes(html), $"e-Arsiv_Fatura_{SafeName(invoice.EArchiveInvoiceNumber ?? invoice.InvoiceNumber)}.html", "text/html; charset=utf-8");
     }
 
     private async Task<Invoice> LoadPendingPortalInvoiceAsync(Guid id, CancellationToken ct)
