@@ -102,11 +102,13 @@ public sealed class OutboxProcessor(
         var number = invoice.EArchiveInvoiceNumber ?? invoice.InvoiceNumber;
         var (html, text) = EmailTemplates.Invoice(invoice.CustomerName);
 
-        await emailService.SendAsync(new EmailMessage(log.RecipientEmail, invoice.CustomerName, log.Subject, html, text,
+        // Kayıtta alıcılar "; " ile ayrılır: ilki ana alıcı, diğerleri bilgi (CC).
+        var recipients = log.RecipientEmail.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        await emailService.SendAsync(new EmailMessage(recipients[0], invoice.CustomerName, log.Subject, html, text,
         [
             new EmailAttachment($"Fatura-{number}.pdf", officialPdf),
             new EmailAttachment($"Is_Dokumu_{invoice.InvoiceNumber}.pdf", reportPdfBytes),
-        ]), ct);
+        ], IdempotencyKey: $"invoice-email-{log.Id:N}") { Cc = recipients.Skip(1).ToList() }, ct);
 
         log.Status = EmailStatus.Sent;
         log.SentAt = clock.GetUtcNow().UtcDateTime;

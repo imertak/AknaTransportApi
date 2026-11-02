@@ -11,7 +11,7 @@ public sealed class EmailLogConfiguration : IEntityTypeConfiguration<EmailLog>
         b.HasKey(x => x.Id);
         b.Property(x => x.Type).HasConversion<string>().HasMaxLength(30);
         b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
-        b.Property(x => x.RecipientEmail).HasMaxLength(200).IsRequired();
+        b.Property(x => x.RecipientEmail).HasMaxLength(2200).IsRequired();
         b.Property(x => x.Subject).HasMaxLength(300).IsRequired();
         b.Property(x => x.LastError).HasMaxLength(2000);
         // Fatura başına tek e-posta kaydı: mükerrer gönderim veritabanı seviyesinde engellenir.

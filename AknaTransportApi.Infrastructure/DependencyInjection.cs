@@ -51,7 +51,16 @@ public static class DependencyInjection
         services.AddSingleton<ITokenService, JwtTokenService>();
 
         // Entegrasyonlar
-        services.AddSingleton<IEmailService, SmtpEmailService>();
+        // E-posta: Email__Provider=Resend ise Resend HTTP API'si, aksi halde SMTP (MailKit).
+        if (configuration.GetSection(EmailOptions.SectionName).Get<EmailOptions>()?.UseResend == true)
+        {
+            services.AddHttpClient<ResendEmailService>();
+            services.AddTransient<IEmailService>(sp => sp.GetRequiredService<ResendEmailService>());
+        }
+        else
+        {
+            services.AddSingleton<IEmailService, SmtpEmailService>();
+        }
         services.AddSingleton<ISmsService, SmsService>();
         services.AddMemoryCache();
         services.AddScoped<IEArchiveInvoiceService, EArchiveInvoiceService>();

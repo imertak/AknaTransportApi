@@ -833,5 +833,27 @@ BEGIN
     VALUES ('20261102181431_AddVehicleTypes', '9.0.10');
     END IF;
 END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261102183012_AddCustomerAdditionalEmails') THEN
+    ALTER TABLE email_logs ALTER COLUMN "RecipientEmail" TYPE character varying(2200);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261102183012_AddCustomerAdditionalEmails') THEN
+    ALTER TABLE customers ADD "AdditionalEmails" character varying(2000);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261102183012_AddCustomerAdditionalEmails') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261102183012_AddCustomerAdditionalEmails', '9.0.10');
+    END IF;
+END $EF$;
 COMMIT;
 
