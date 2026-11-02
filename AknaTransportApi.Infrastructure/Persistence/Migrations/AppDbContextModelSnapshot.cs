@@ -169,7 +169,8 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("InvoiceId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"Type\" = 'InvoiceDelivery'");
 
                     b.HasIndex("Status", "CreatedAt");
 

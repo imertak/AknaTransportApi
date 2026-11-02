@@ -147,6 +147,45 @@ public class InvoiceTests(AknaApiFactory factory) : IClassFixture<AknaApiFactory
     }
 
     [Fact]
+    public async Task Draft_invoice_can_be_emailed_without_being_issued()
+    {
+        var admin = await _client.AdminTokenAsync();
+        var email = $"taslak{Guid.NewGuid():N}"[..14] + "@example.com";
+        var customer = await _client.OkAsync<CustomerDto>(HttpMethod.Post, "/api/customers",
+            new CustomerRequest { CompanyName = $"Taslak {Guid.NewGuid():N}"[..16], Emails = [email, "cc@taslak.example"] }, admin);
+        var job = await _client.CreateJobAsync(admin, customer.Id, assignToMe: true);
+        await _client.RunToCompletionAsync(job.Job.Id, admin);
+        var invoice = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest { JobIds = [job.Job.Id] }, admin);
+
+        var queued = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{invoice.Id}/send-email", token: admin);
+        Assert.Equal(EmailStatus.Pending, queued.ManualEmail!.Status);
+        // Kuyrukta bekleyen gönderim varken ikinci istek reddedilir (çift tıklama).
+        var (dupStatus, _) = await _client.SendAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{invoice.Id}/send-email", null, admin);
+        Assert.Equal(HttpStatusCode.Conflict, dupStatus);
+
+        await ProcessOutboxAsync();
+        var mail = Assert.Single(factory.Email.Sent, m => m.To == email);
+        Assert.Contains("Taslağı", mail.Subject);
+        Assert.Contains("TASLAK", mail.HtmlBody);
+        Assert.Equal(["cc@taslak.example"], mail.Cc);
+        Assert.Equal([$"Fatura_Taslagi_{invoice.InvoiceNumber}.pdf", $"Is_Dokumu_{invoice.InvoiceNumber}.pdf"], mail.Attachments.Select(a => a.FileName));
+
+        // Fatura taslak kalır; tekrar gönderilebilir.
+        var after = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Get, $"/api/invoices/{invoice.Id}", token: admin);
+        Assert.Equal(InvoiceStatus.Draft, after.Status);
+        Assert.Equal(EmailStatus.Sent, after.ManualEmail!.Status);
+        Assert.Null(after.Email);
+        await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{invoice.Id}/send-email", token: admin);
+        await ProcessOutboxAsync();
+        Assert.Equal(2, factory.Email.Sent.Count(m => m.To == email));
+
+        // Kesildiğinde otomatik e-posta elle gönderimlerden bağımsız olarak gider.
+        await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{invoice.Id}/issue", token: admin);
+        await ProcessOutboxAsync();
+        Assert.Contains(factory.Email.Sent, m => m.To == email && m.Attachments.Any(a => a.FileName.StartsWith("Fatura-")));
+    }
+
+    [Fact]
     public async Task Invoice_requires_valid_customer_email()
     {
         var admin = await _client.AdminTokenAsync();

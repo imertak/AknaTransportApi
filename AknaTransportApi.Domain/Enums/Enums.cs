@@ -56,6 +56,8 @@ public enum EmailType
 {
     InvoiceDelivery = 0,
     PasswordReset = 1,
+    /// <summary>Yöneticinin "E-posta gönder" ile elle gönderdiği fatura e-postası (taslak dahil). Tekrar gönderilebilir.</summary>
+    InvoiceManual = 2,
 }
 
 public enum OutboxMessageStatus

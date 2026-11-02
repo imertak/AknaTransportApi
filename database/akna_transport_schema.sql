@@ -855,5 +855,27 @@ BEGIN
     VALUES ('20261102183012_AddCustomerAdditionalEmails', '9.0.10');
     END IF;
 END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261102184815_AddManualInvoiceEmails') THEN
+    DROP INDEX "IX_email_logs_InvoiceId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261102184815_AddManualInvoiceEmails') THEN
+    CREATE UNIQUE INDEX "IX_email_logs_InvoiceId" ON email_logs ("InvoiceId") WHERE "Type" = 'InvoiceDelivery';
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261102184815_AddManualInvoiceEmails') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261102184815_AddManualInvoiceEmails', '9.0.10');
+    END IF;
+END $EF$;
 COMMIT;
 
