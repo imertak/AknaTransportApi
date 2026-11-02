@@ -283,7 +283,8 @@ public sealed class GibPortalEArchiveAdapter : IEArchiveSmsSigningAdapter
             ["postaKodu"] = "",
             ["tel"] = r.Customer.PhoneNumber ?? "",
             ["fax"] = "",
-            ["eposta"] = r.Customer.Email ?? "",
+            // Müşteri e-postası GİB portalına gönderilmez; fatura e-postası uygulamanın kendi gönderiminden gider.
+            ["eposta"] = "",
             ["websitesi"] = "",
             ["vergiDairesi"] = r.Customer.TaxOffice ?? "",
             ["iadeTable"] = new JsonArray(),

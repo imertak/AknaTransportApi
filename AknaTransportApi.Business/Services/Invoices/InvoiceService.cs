@@ -602,12 +602,16 @@ public sealed class InvoiceService(
     {
         InvoiceId = invoiceId,
         JobId = job.Id,
+        // İşin ek açıklaması faturaya yazılmaz, yalnızca iş dökümünde yer alır. Güzergâhı olmayan eski işlerde açıklama güzergâh yerine geçer.
         Description = Truncate(string.IsNullOrWhiteSpace(job.StoreName)
-            ? $"{job.JobDate:dd.MM.yyyy} {JobMappings.ComposeText(job.RouteDescription, job.Description)} ({job.JobNumber})"
-            : $"{job.JobDate:dd.MM.yyyy} {job.StoreName.Trim()} - {JobMappings.ComposeText(job.RouteDescription, job.Description)} ({job.JobNumber})", 500),
+            ? $"{job.JobDate:dd.MM.yyyy} {InvoiceLineText(job)} ({job.JobNumber})"
+            : $"{job.JobDate:dd.MM.yyyy} {job.StoreName.Trim()} - {InvoiceLineText(job)} ({job.JobNumber})", 500),
         Quantity = 1,
         UnitPrice = job.Price,
     };
+
+    private static string InvoiceLineText(TransportJob job) =>
+        string.IsNullOrWhiteSpace(job.RouteDescription) ? job.Description.Trim() : job.RouteDescription.Trim();
 
     private EArchiveInvoiceRequest BuildRequest(Invoice invoice, Customer customer) => new(
         invoice.Id,
