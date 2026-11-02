@@ -69,3 +69,14 @@ public class ResendEmailServiceTests
         Assert.Equal(["imertakpinar0@gmail.com"], new EmailOptions { AlwaysCc = "imertakpinar0@gmail.com" }.CcFor(message with { Cc = [] }));
     }
 }
+
+public class ChromeHtmlPdfRendererTests
+{
+    [Fact]
+    public async Task Missing_browser_is_reported_as_unavailable()
+    {
+        var renderer = new ChromeHtmlPdfRenderer(Options.Create(new HtmlPdfOptions { ChromePath = "/yok/chrome" }), NullLogger<ChromeHtmlPdfRenderer>.Instance);
+        Assert.False(renderer.IsAvailable);
+        await Assert.ThrowsAsync<IntegrationUnavailableException>(() => renderer.RenderAsync("<p>x</p>", CancellationToken.None));
+    }
+}

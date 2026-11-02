@@ -127,6 +127,7 @@ Veritabanı notları:
 | `Email__Provider` | Fatura e-postası için | `Resend` veya `Smtp` (varsayılan) |
 | `Email__ResendApiKey` | Resend için | Resend panelinden alınan API anahtarı (`re_...`). `Email__FromEmail` adresinin alan adı Resend'de doğrulanmış olmalıdır. |
 | `Email__Host`, `Email__Port`, `Email__Username`, `Email__Password`, `Email__FromEmail`, `Email__FromName` | Fatura e-postası için | `Email__FromEmail` / `Email__FromName` her iki sağlayıcıda kullanılır; diğerleri yalnızca SMTP. `Email__Security`: Auto / StartTls / SslOnConnect / None. Gmail: `smtp.gmail.com`, 587, `StartTls`, kullanıcı ve gönderen Gmail adresi, şifre Google hesabındaki **uygulama şifresi** (2 adımlı doğrulama açık olmalı). |
+| `Pdf__ChromePath` | Hayır | GİB e-Arşiv portalındaki imzalı fatura (HTML) bu tarayıcıyla PDF'e çevrilip e-postaya eklenir. Boşsa bilinen kurulum yerleri denenir; Windows'ta Edge otomatik bulunur. Linux sunucuda `sudo apt install chromium` yeterlidir. Tarayıcı yoksa GİB no ve ETTN ile üretilen PDF gönderilir, GİB belgesi HTML olarak eklenir. |
 | `Email__AlwaysCc` | Hayır | Her gönderilen e-postaya CC olarak eklenen adres(ler), `;` ile ayrılır. Varsayılan `imertakpinar0@gmail.com`. |
 | `Sms__Provider`, `Sms__ApiUrl`, `Sms__Username`, `Sms__Password`, `Sms__ApiKey`, `Sms__Sender` | SMS için | Bkz. [SMS](#sms-ile-kullanıcı-şifresi) |
 | `EArchive__Provider` | Gerçek fatura için | `GibPortal` (GİB e-Arşiv portalı, yerleşik) veya eklenen özel entegratörün adı. Boşsa e-Arşiv kapalıdır. |

@@ -102,13 +102,23 @@ public sealed class OutboxProcessor(
         log.AttemptCount++;
         var issued = invoice.Status == InvoiceStatus.Issued;
         var number = invoice.EArchiveInvoiceNumber ?? invoice.InvoiceNumber;
-        // Taslakta "resmi fatura değildir" ibareli önizleme PDF'i eklenir; fatura durumu değişmez.
-        var invoicePdf = issued
-            ? new EmailAttachment($"Fatura-{number}.pdf", await invoiceService.GetOfficialPdfAsync(payload.InvoiceId, ct))
-            : new EmailAttachment($"Fatura_Taslagi_{invoice.InvoiceNumber}.pdf", (await invoiceService.GetPdfAsync(payload.InvoiceId, ct)).Content);
-        // Kesilmiş faturada GİB portalındaki orijinal belge (imzalı fatura görüntüsü) de eklenir. Portal geçici olarak
-        // yanıt vermezse istisna yükselir ve outbox yeniden dener; e-posta orijinal belge olmadan gitmez.
-        var original = issued ? await invoiceService.GetIssuedEArchiveDocumentAsync(payload.InvoiceId, ct) : null;
+        // Kesilmiş fatura: GİB portalındaki imzalı belgenin PDF'i (e-Arsiv_Fatura_<no>.pdf). Sunucuda tarayıcı yoksa
+        // GİB no ve ETTN ile üretilen PDF gönderilir ve GİB'in orijinal belgesi HTML olarak eklenir.
+        // Taslak: "resmi fatura değildir" ibareli önizleme PDF'i; fatura durumu değişmez.
+        EmailAttachment invoicePdf;
+        FileDownload? original = null;
+        if (issued)
+        {
+            var official = await invoiceService.GetOfficialDocumentAsync(payload.InvoiceId, ct);
+            invoicePdf = official.FromProvider
+                ? new EmailAttachment($"e-Arsiv_Fatura_{number}.pdf", official.Content)
+                : new EmailAttachment($"Fatura-{number}.pdf", official.Content);
+            if (!official.FromProvider) original = await invoiceService.GetIssuedEArchiveDocumentAsync(payload.InvoiceId, ct);
+        }
+        else
+        {
+            invoicePdf = new EmailAttachment($"Fatura_Taslagi_{invoice.InvoiceNumber}.pdf", (await invoiceService.GetPdfAsync(payload.InvoiceId, ct)).Content);
+        }
         var report = await invoiceService.BuildJobReportAsync(payload.InvoiceId, ct);
         var reportAttachment = new EmailAttachment($"Is_Dokumu_{invoice.InvoiceNumber}.pdf", reportPdf.Generate(report));
         var detail = await invoiceService.GetAsync(payload.InvoiceId, ct);

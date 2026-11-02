@@ -107,10 +107,11 @@ public class GibPortalInvoiceTests(GibPortalApiFactory factory) : IClassFixture<
         Assert.NotNull(issued.Email);
         Assert.False(issued.RequiresSmsSignature);
 
-        // PDF: GİB PDF vermediği için e-Arşiv bilgileriyle üretilir; HTML görüntü portaldan alınır.
+        // PDF: GİB PDF vermediği için portaldaki imzalı belge (HTML) PDF'e çevrilir ve saklanır.
         var pdf = await _client.SendAsync(new HttpRequestMessage(HttpMethod.Get, $"/api/invoices/{pending.Id}/pdf") { Headers = { { "Authorization", $"Bearer {admin}" } } });
         Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);
         Assert.StartsWith("Fatura-GIB2026", pdf.Content.Headers.ContentDisposition!.FileNameStar ?? pdf.Content.Headers.ContentDisposition.FileName);
+        Assert.Contains($"e-Arşiv fatura {issued.EArchiveReference}", await pdf.Content.ReadAsStringAsync());
         var view = await _client.SendAsync(new HttpRequestMessage(HttpMethod.Get, $"/api/invoices/{pending.Id}/earchive/view") { Headers = { { "Authorization", $"Bearer {admin}" } } });
         Assert.Equal(HttpStatusCode.OK, view.StatusCode);
         Assert.Contains(issued.EArchiveReference!, await view.Content.ReadAsStringAsync());
@@ -232,5 +233,55 @@ public class GibPortalInvoiceTests(GibPortalApiFactory factory) : IClassFixture<
         var (admin, jobId) = await CompletedJobAsync();
         await IssuedDraftAsync(admin, jobId, withholding: null);
         Assert.Contains("Mozilla/5.0", factory.Portal.LastUserAgent);
+    }
+
+    private async Task ProcessOutboxAsync()
+    {
+        using var scope = factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<IOutboxProcessor>().ProcessPendingAsync(CancellationToken.None);
+    }
+
+    private async Task<InvoiceDetailDto> SignedInvoiceAsync(string admin, Guid jobId)
+    {
+        var pending = await IssuedDraftAsync(admin, jobId);
+        var sms = await _client.OkAsync<EArchiveSmsChallengeDto>(HttpMethod.Post, $"/api/invoices/{pending.Id}/earchive/sms", token: admin);
+        return await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{pending.Id}/earchive/sign",
+            new SignInvoiceRequest { OperationId = sms.OperationId, Code = FakeGibPortal.SmsCode }, admin);
+    }
+
+    [Fact]
+    public async Task Signed_invoice_email_carries_gib_document_as_pdf()
+    {
+        factory.HtmlPdf.Available = true;
+        var (admin, jobId) = await CompletedJobAsync();
+        var issued = await SignedInvoiceAsync(admin, jobId);
+        await ProcessOutboxAsync();
+
+        var mail = Assert.Single(factory.Email.Sent, m => m.Attachments.Any(a => a.FileName.Contains(issued.EArchiveInvoiceNumber!)));
+        var files = mail.Attachments.Where(a => a.ContentId is null).Select(a => a.FileName).ToList();
+        Assert.Equal([$"e-Arsiv_Fatura_{issued.EArchiveInvoiceNumber}.pdf", $"Is_Dokumu_{issued.InvoiceNumber}.pdf"], files);
+        var gibPdf = System.Text.Encoding.UTF8.GetString(mail.Attachments.First(a => a.FileName.StartsWith("e-Arsiv_Fatura_")).Content);
+        Assert.StartsWith("%PDF", gibPdf);
+        Assert.Contains($"e-Arşiv fatura {issued.EArchiveReference}", gibPdf);
+    }
+
+    [Fact]
+    public async Task Without_browser_email_carries_own_pdf_and_gib_html()
+    {
+        factory.HtmlPdf.Available = false;
+        try
+        {
+            var (admin, jobId) = await CompletedJobAsync();
+            var issued = await SignedInvoiceAsync(admin, jobId);
+            await ProcessOutboxAsync();
+
+            var mail = Assert.Single(factory.Email.Sent, m => m.Attachments.Any(a => a.FileName.Contains(issued.EArchiveInvoiceNumber!)));
+            var files = mail.Attachments.Where(a => a.ContentId is null).Select(a => a.FileName).ToList();
+            Assert.Equal([$"e-Arsiv_Fatura_{issued.EArchiveInvoiceNumber}.html", $"Fatura-{issued.EArchiveInvoiceNumber}.pdf", $"Is_Dokumu_{issued.InvoiceNumber}.pdf"], files);
+        }
+        finally
+        {
+            factory.HtmlPdf.Available = true;
+        }
     }
 }

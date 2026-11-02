@@ -185,7 +185,7 @@ public class InvoiceTests(AknaApiFactory factory) : IClassFixture<AknaApiFactory
         // Kesildiğinde otomatik e-posta elle gönderimlerden bağımsız olarak gider.
         await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{invoice.Id}/issue", token: admin);
         await ProcessOutboxAsync();
-        Assert.Contains(factory.Email.Sent, m => m.To == email && m.Attachments.Any(a => a.FileName.StartsWith("Fatura-")));
+        Assert.Contains(factory.Email.Sent, m => m.To == email && m.Attachments.Any(a => a.FileName.StartsWith("e-Arsiv_Fatura_")));
     }
 
     [Fact]
