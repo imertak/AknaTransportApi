@@ -46,7 +46,7 @@ public sealed class ChromeHtmlPdfRenderer(IOptions<HtmlPdfOptions> options, ILog
             };
             foreach (var arg in new[]
                      {
-                         "--headless", "--disable-gpu", "--no-sandbox", "--no-first-run", "--no-default-browser-check",
+                         "--headless", "--disable-gpu", "--virtual-time-budget=5000", "--no-sandbox", "--no-first-run", "--no-default-browser-check",
                          "--disable-extensions", "--disable-background-networking", "--no-pdf-header-footer",
                          $"--user-data-dir={Path.Combine(dir.FullName, "profile")}", $"--print-to-pdf={output}", new Uri(input).AbsoluteUri,
                      })
