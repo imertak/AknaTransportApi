@@ -287,4 +287,23 @@ public class GibPortalInvoiceTests(GibPortalApiFactory factory) : IClassFixture<
             factory.HtmlPdf.Available = true;
         }
     }
+
+    [Fact]
+    public async Task Portal_draft_pdf_comes_from_gib_with_logo()
+    {
+        var (admin, jobId) = await CompletedJobAsync();
+        var pending = await IssuedDraftAsync(admin, jobId);
+        Assert.Equal(InvoiceStatus.Pending, pending.Status);
+
+        var pdf = await _client.SendAsync(new HttpRequestMessage(HttpMethod.Get, $"/api/invoices/{pending.Id}/pdf") { Headers = { { "Authorization", $"Bearer {admin}" } } });
+        Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);
+        Assert.StartsWith("TASLAK-", pdf.Content.Headers.ContentDisposition!.FileNameStar ?? pdf.Content.Headers.ContentDisposition.FileName);
+        var content = await pdf.Content.ReadAsStringAsync();
+        Assert.Contains($"e-Arşiv fatura {pending.EArchiveReference}", content);
+        Assert.Contains("<svg", content);
+
+        // Portal taslağı saklanmaz; fatura hâlâ beklemede.
+        var still = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Get, $"/api/invoices/{pending.Id}", token: admin);
+        Assert.Equal(InvoiceStatus.Pending, still.Status);
+    }
 }
