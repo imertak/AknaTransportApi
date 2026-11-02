@@ -94,14 +94,14 @@ public sealed class QuestPdfJobReportGenerator(IBusinessCalendar calendar) : IJo
                     c.ConstantColumn(118);
                     c.ConstantColumn(88);
                     c.RelativeColumn();
-                    c.ConstantColumn(84);
+                    c.ConstantColumn(104);
                 });
 
                 // Tablo başlığı her sayfada otomatik tekrarlanır.
                 table.Header(h =>
                 {
                     HeaderCell(h.Cell()).Text("TARİH");
-                    HeaderCell(h.Cell()).Text("MAĞAZA / FİRMA");
+                    HeaderCell(h.Cell()).Text("FİRMA / MAĞAZA");
                     HeaderCell(h.Cell()).Text("ARAÇ");
                     HeaderCell(h.Cell()).Text("YAPILAN NAKLİYELER");
                     HeaderCell(h.Cell()).AlignRight().Text("FİYAT");
@@ -118,14 +118,14 @@ public sealed class QuestPdfJobReportGenerator(IBusinessCalendar calendar) : IJo
                     var r = d.Rows[i];
                     var shade = i % 2 == 1 ? Zebra : "#FFFFFF";
                     BodyCell(table.Cell(), shade).Text(PdfFormat.Date(r.Date));
-                    BodyCell(table.Cell(), shade).Text(r.StoreName).SemiBold();
+                    BodyCell(table.Cell(), shade).Text(r.PartyLabel).SemiBold();
                     BodyCell(table.Cell(), shade).Text(r.VehicleType.ToTurkish());
                     BodyCell(table.Cell(), shade).Text(r.Description);
-                    BodyCell(table.Cell(), shade).AlignRight().Text(PdfFormat.Money(r.Price, d.Currency, decimals: false)).SemiBold();
+                    BodyCell(table.Cell(), shade).AlignRight().Text($"{PdfFormat.Money(r.Price, d.Currency, decimals: false)} + KDV").SemiBold();
                 }
             });
 
-            col.Item().PaddingTop(12).AlignRight().Width(225).Border(1).BorderColor(Black).Column(totals =>
+            col.Item().PaddingTop(12).AlignRight().Width(255).Border(1).BorderColor(Black).Column(totals =>
             {
                 totals.Item().PaddingVertical(7).PaddingHorizontal(9).Row(r =>
                 {
@@ -135,7 +135,7 @@ public sealed class QuestPdfJobReportGenerator(IBusinessCalendar calendar) : IJo
                 totals.Item().Background(Black).PaddingVertical(7).PaddingHorizontal(9).Row(r =>
                 {
                     r.RelativeItem().Text("Toplam nakliye tutarı").FontSize(9).FontColor(Colors.White);
-                    r.AutoItem().Text(PdfFormat.Money(d.TotalAmount, d.Currency)).FontSize(9.5f).Bold().FontColor(Colors.White);
+                    r.AutoItem().Text($"{PdfFormat.Money(d.TotalAmount, d.Currency)} + KDV").FontSize(9.5f).Bold().FontColor(Colors.White);
                 });
             });
         });

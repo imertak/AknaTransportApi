@@ -105,7 +105,7 @@ public sealed class OutboxProcessor(
         await emailService.SendAsync(new EmailMessage(log.RecipientEmail, invoice.CustomerName, log.Subject, html, text,
         [
             new EmailAttachment($"Fatura-{number}.pdf", officialPdf),
-            new EmailAttachment($"Nakliye-Is-Dokumu-{number}.pdf", reportPdfBytes),
+            new EmailAttachment($"Is_Dokumu_{invoice.InvoiceNumber}.pdf", reportPdfBytes),
         ]), ct);
 
         log.Status = EmailStatus.Sent;
