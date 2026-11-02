@@ -80,6 +80,7 @@ public class GibPortalInvoiceTests(GibPortalApiFactory factory) : IClassFixture<
         var sent = factory.Portal.Created.Last();
         Assert.Equal("TEVKIFAT", sent["faturaTipi"]!.ToString());
         Assert.Equal("1234567890", sent["vknTckn"]!.ToString());
+        Assert.Equal("", sent["eposta"]!.ToString());
         Assert.Equal("4800.00", sent["vergilerDahilToplamTutar"]!.ToString());
         Assert.Equal("4640.00", sent["odenecekTutar"]!.ToString());
         var row = sent["malHizmetTable"]![0]!;

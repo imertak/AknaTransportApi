@@ -96,6 +96,25 @@ public class InvoiceTests(AknaApiFactory factory) : IClassFixture<AknaApiFactory
     }
 
     [Fact]
+    public async Task Invoice_line_has_route_but_not_job_extra_description()
+    {
+        var admin = await _client.AdminTokenAsync();
+        var customer = await _client.CreateCustomerAsync(admin);
+        var job = await _client.OkAsync<JobDetailDto>(HttpMethod.Post, "/api/jobs", new CreateJobRequest
+        {
+            CustomerId = customer.Id, JobDate = new DateOnly(2026, 10, 21), StoreName = "Skyland", VehicleType = VehicleType.Panelvan,
+            Stops = [new() { StopType = StopType.Pickup, Address = "Skyland AVM" }, new() { StopType = StopType.Delivery, Address = "Manço Merkez Depo" }],
+            Description = "Gece yükleme gündüz boşaltma", Price = 4000,
+        }, admin);
+
+        var invoice = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest { JobIds = [job.Job.Id] }, admin);
+        var line = Assert.Single(invoice.Items).Description;
+        Assert.Contains("Skyland AVM - Manço Merkez Depo", line);
+        Assert.DoesNotContain("Gece yükleme", line);
+        Assert.Null(invoice.Notes);
+    }
+
+    [Fact]
     public async Task Invoice_requires_valid_customer_email()
     {
         var admin = await _client.AdminTokenAsync();
