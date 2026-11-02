@@ -366,7 +366,7 @@ public sealed class InvoiceService(
         // Yalnızca bu faturanın kalemlerindeki işler: müşteriye başka işlerin kaydı gitmez.
         var rows = await invoiceItems.QueryAsNoTracking().Where(x => x.InvoiceId == id)
             .OrderBy(x => x.Job!.JobDate).ThenBy(x => x.Job!.JobNumber)
-            .Select(x => new JobReportRow(x.Job!.JobDate, x.Job.StoreName, x.Job.VehicleType, (x.Job.RouteDescription == "" ? x.Job.Description : x.Job.Description == "" ? x.Job.RouteDescription : x.Job.RouteDescription + " (" + x.Job.Description + ")"), x.Job.Price, null))
+            .Select(x => new JobReportRow(x.Job!.JobDate, x.Job.StoreName, x.Job.VehicleType, (x.Job.RouteDescription == "" ? x.Job.Description : x.Job.Description == "" ? x.Job.RouteDescription : x.Job.RouteDescription + " (" + x.Job.Description + ")"), x.Job.Price, header.CustomerName))
             .ToListAsync(ct);
 
         return new JobReportDocument(
@@ -384,8 +384,9 @@ public sealed class InvoiceService(
     public async Task<FileDownload> GetJobReportPdfAsync(Guid id, CancellationToken ct)
     {
         var report = await BuildJobReportAsync(id, ct);
-        var number = await invoices.QueryAsNoTracking().Where(i => i.Id == id).Select(i => i.EArchiveInvoiceNumber ?? i.InvoiceNumber).FirstAsync(ct);
-        return new FileDownload(jobReportPdf.Generate(report), $"Nakliye-Dokumu-{SafeName(number)}.pdf");
+        // Uygulamada görünen fatura numarasıyla adlandırılır: Is_Dokumu_AKF-2026-000005.pdf
+        var number = await invoices.QueryAsNoTracking().Where(i => i.Id == id).Select(i => i.InvoiceNumber).FirstAsync(ct);
+        return new FileDownload(jobReportPdf.Generate(report), $"Is_Dokumu_{SafeName(number)}.pdf");
     }
 
     /// <summary>
@@ -601,7 +602,9 @@ public sealed class InvoiceService(
     {
         InvoiceId = invoiceId,
         JobId = job.Id,
-        Description = Truncate($"{job.JobDate:dd.MM.yyyy} {job.StoreName} - {JobMappings.ComposeText(job.RouteDescription, job.Description)} ({job.JobNumber})", 500),
+        Description = Truncate(string.IsNullOrWhiteSpace(job.StoreName)
+            ? $"{job.JobDate:dd.MM.yyyy} {JobMappings.ComposeText(job.RouteDescription, job.Description)} ({job.JobNumber})"
+            : $"{job.JobDate:dd.MM.yyyy} {job.StoreName.Trim()} - {JobMappings.ComposeText(job.RouteDescription, job.Description)} ({job.JobNumber})", 500),
         Quantity = 1,
         UnitPrice = job.Price,
     };

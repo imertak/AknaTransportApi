@@ -51,6 +51,27 @@ public class JobTests(AknaApiFactory factory) : IClassFixture<AknaApiFactory>
     }
 
     [Fact]
+    public async Task Store_name_is_optional()
+    {
+        var admin = await _client.AdminTokenAsync();
+        var customer = await _client.CreateCustomerAsync(admin);
+        var job = await _client.OkAsync<JobDetailDto>(HttpMethod.Post, "/api/jobs", new CreateJobRequest
+        {
+            CustomerId = customer.Id, JobDate = new DateOnly(2026, 10, 26), VehicleType = VehicleType.Pickup,
+            PickupAddress = "A", DeliveryAddress = "B", Description = "A - B", Price = 100,
+        }, admin);
+        Assert.Equal(string.Empty, job.Job.StoreName);
+    }
+
+    [Theory]
+    [InlineData("Akna Lojistik", "Kadıköy Şubesi", "Akna Lojistik / Kadıköy Şubesi")]
+    [InlineData("Akna Lojistik", "", "Akna Lojistik")]
+    [InlineData("Akna Lojistik", null, "Akna Lojistik")]
+    [InlineData("Akna Lojistik", "akna lojistik", "Akna Lojistik")]
+    public void Report_party_label_is_company_slash_store(string company, string? store, string expected) =>
+        Assert.Equal(expected, JobMappings.PartyLabel(company, store));
+
+    [Fact]
     public async Task Admin_can_assign_job_to_self_and_complete_it_as_driver()
     {
         var adminAuth = await _client.LoginAsync(AknaApiFactory.AdminEmail, AknaApiFactory.AdminPassword);
@@ -204,6 +225,6 @@ public class JobTests(AknaApiFactory factory) : IClassFixture<AknaApiFactory>
         var (status, body) = await _client.SendAsync<object>(HttpMethod.Post, "/api/jobs", new { price = -5 }, admin);
         Assert.Equal(HttpStatusCode.BadRequest, status);
         Assert.Contains(body!.Errors, e => e.Field == "price");
-        Assert.Contains(body.Errors, e => e.Field == "storeName");
+        Assert.DoesNotContain(body.Errors, e => e.Field == "storeName");
     }
 }

@@ -22,6 +22,15 @@ public static class JobMappings
             : j.Invoice!.Status == InvoiceStatus.Issued ? JobBillingStatus.Invoiced : JobBillingStatus.InDraft,
         j.Contacts.OrderBy(c => c.Sequence).Select(c => new JobContactDto(c.Id, c.Sequence, c.Role, c.Name, c.PhoneNumber)).ToList());
 
+    /// <summary>"Firma / Mağaza" (mağaza adı isteğe bağlı; boşsa yalnızca firma).</summary>
+    public static string PartyLabel(string? companyName, string? storeName)
+    {
+        var company = companyName?.Trim() ?? string.Empty;
+        var store = storeName?.Trim() ?? string.Empty;
+        if (store.Length == 0 || string.Equals(store, company, StringComparison.CurrentCultureIgnoreCase)) return company;
+        return company.Length == 0 ? store : $"{company} / {store}";
+    }
+
     /// <summary>PDF ve fatura satırları için iş metni: otomatik güzergâh + elle yazılan açıklama.</summary>
     public static string ComposeText(string routeDescription, string description) =>
         string.IsNullOrWhiteSpace(routeDescription) ? description
@@ -34,7 +43,7 @@ public static class JobMappings
     public static void Apply(this TransportJob job, JobRequestBase request)
     {
         job.JobDate = request.JobDate;
-        job.StoreName = request.StoreName.Trim();
+        job.StoreName = request.StoreName?.Trim() ?? string.Empty;
         job.VehicleType = request.VehicleType;
         job.Description = request.Description.TrimOrNull() ?? string.Empty;
         job.Price = Domain.Common.Money.Round(request.Price);
