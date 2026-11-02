@@ -199,9 +199,10 @@ public sealed class InvoiceService(
         invoice.EnsureEditable();
         var customer = await LoadCustomerForInvoiceAsync(invoice.CustomerId, ct);
 
-        // Kesimden önce faturadaki her işin hâlâ bu faturaya bağlı ve tamamlanmış olduğu doğrulanır.
-        if (invoice.Items.Count == 0 || invoice.Items.Any(x => x.Job is null || x.Job.InvoiceId != invoice.Id || x.Job.Status != JobStatus.Completed))
-            throw new ConflictException("Faturadaki işlerden biri artık bu faturaya bağlı değil veya tamamlanmış durumda değil. Faturayı güncelleyin.");
+        // Kesimden önce faturadaki her işin hâlâ bu faturaya bağlı ve iptal edilmemiş olduğu doğrulanır.
+        // Yönetici işi bitmeden de faturalayabilir; iptal edilmiş iş faturalanamaz.
+        if (invoice.Items.Count == 0 || invoice.Items.Any(x => x.Job is null || x.Job.InvoiceId != invoice.Id || x.Job.Status == JobStatus.Cancelled))
+            throw new ConflictException("Faturadaki işlerden biri artık bu faturaya bağlı değil veya iptal edilmiş. Faturayı güncelleyin.");
 
         // Pending durumu kaydedilir; ConcurrencyStamp sayesinde aynı fatura eşzamanlı iki kez gönderilemez.
         invoice.MarkPending(eArchive.ProviderName!);
@@ -523,7 +524,8 @@ public sealed class InvoiceService(
         foreach (var missing in jobIds.Except(selected.Select(j => j.Id))) errors.Add(new ErrorDetail("jobIds", $"İş bulunamadı: {missing}"));
         foreach (var job in selected)
         {
-            if (job.Status != JobStatus.Completed) errors.Add(new ErrorDetail("jobIds", $"{job.JobNumber} tamamlanmadığı için faturalanamaz."));
+            // İş tamamlanmadan da faturalanabilir (ön fatura / peşin tahsilat); yalnızca iptal edilmiş iş faturalanamaz.
+            if (job.Status == JobStatus.Cancelled) errors.Add(new ErrorDetail("jobIds", $"{job.JobNumber} iptal edildiği için faturalanamaz."));
             if (job.InvoiceId is not null && job.InvoiceId != currentInvoiceId) errors.Add(new ErrorDetail("jobIds", $"{job.JobNumber} zaten başka bir faturada."));
         }
         if (selected.Select(j => j.CustomerId).Distinct().Count() > 1) errors.Add(new ErrorDetail("jobIds", "Seçilen işler aynı müşteriye ait olmalıdır."));
@@ -554,7 +556,7 @@ public sealed class InvoiceService(
     private async Task ClaimJobsAsync(Guid invoiceId, List<Guid> jobIds, DateTime now, CancellationToken ct)
     {
         var affected = await jobs.Query()
-            .Where(j => jobIds.Contains(j.Id) && j.InvoiceId == null && j.Status == JobStatus.Completed)
+            .Where(j => jobIds.Contains(j.Id) && j.InvoiceId == null && j.Status != JobStatus.Cancelled)
             .ExecuteUpdateAsync(s => s.SetProperty(j => j.InvoiceId, (Guid?)invoiceId).SetProperty(j => j.UpdatedAt, now), ct);
         if (affected != jobIds.Count) throw new ConflictException("Seçilen işlerden biri veya birkaçı başka bir faturaya eklenmiş.");
     }

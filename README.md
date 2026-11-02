@@ -280,7 +280,7 @@ GİB portalı ile imza: `POST /{id}/earchive/sms` (imza SMS'i), `POST /{id}/earc
 
 Oluşturma/güncelleme isteğinde `withholdingCode` (ör. `"624"`), `noWithholding` ve `iban` alanları vardır. Yanıtta `withholdingAmount`, `payableAmount` (genel toplam − tevkifat), `amountInWords` ("YALNIZ: ... TÜRK LİRASI"), `iban`, `documentNote` ve `requiresSmsSignature` döner.
 
-Bir faturaya yalnızca aynı müşterinin tamamlanmış ve başka faturada olmayan işleri eklenebilir. İş, taslak oluşturulurken `transport_jobs.InvoiceId` koşullu güncellemesiyle (yalnızca `InvoiceId IS NULL` satırlar, transaction içinde) faturaya bağlanır; bu yüzden aynı iş eşzamanlı iki faturaya eklenemez. Kesim öncesinde her işin hâlâ bu faturaya bağlı ve tamamlanmış olduğu yeniden doğrulanır.
+Bir faturaya aynı müşterinin iptal edilmemiş ve başka faturada olmayan işleri eklenebilir; yönetici işi tamamlanmadan da faturalayabilir (ön fatura / peşin tahsilat). Faturaya eklenen iş yürümeye devam eder ve tamamlanabilir, ancak düzenlenemez ve iptal edilemez. İş, taslak oluşturulurken `transport_jobs.InvoiceId` koşullu güncellemesiyle (yalnızca `InvoiceId IS NULL` satırlar, transaction içinde) faturaya bağlanır; bu yüzden aynı iş eşzamanlı iki faturaya eklenemez. Kesim öncesinde her işin hâlâ bu faturaya bağlı ve iptal edilmemiş olduğu yeniden doğrulanır.
 
 ### Raporlar — `/api/reports` (Admin)
 `GET /jobs/pdf`, `GET /jobs/summary`, `GET /jobs` — parametreler: `startDate`, `endDate`, `customerId`, `driverId`, `storeName`, `vehicleType`, `scope` (`Completed` varsayılan, `NotCancelled`, `All`).
@@ -331,7 +331,7 @@ Tamamlanan işler ─▶ POST /api/invoices (Draft) ─▶ POST /{id}/issue ─�
                                                          e-posta: e-Arşiv PDF + iş dökümü PDF
 ```
 
-- Fatura oluşturma ile işin tamamlanması bağımsızdır. Bir faturada aynı müşterinin birden fazla tamamlanmış işi olabilir.
+- Fatura oluşturma ile işin tamamlanması bağımsızdır. Bir faturada aynı müşterinin birden fazla işi olabilir; işin bitmiş olması gerekmez.
 - Aynı iş iki faturaya eklenemez: `transport_jobs.InvoiceId` koşullu güncellemeyle (`WHERE InvoiceId IS NULL`) transaction içinde bağlanır; eşzamanlı isteklerde biri 409 alır. İptal edilen faturanın işleri serbest kalır.
 - Fatura oluştururken müşterinin geçerli e-posta adresi zorunludur.
 - **Issued durumuna yalnızca gerçek e-Arşiv sağlayıcısının başarılı yanıtıyla geçilir.** Sağlayıcı yapılandırılmamışsa `issue` 503 döner ve fatura Draft kalır. Taslak faturanın PDF'i "TASLAK – resmi fatura değildir" filigranlıdır; yanıtta `isOfficial: false`.
