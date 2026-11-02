@@ -394,7 +394,7 @@ public sealed class InvoiceService(
         {
             try
             {
-                var pdf = await htmlPdf.RenderAsync(System.Text.Encoding.UTF8.GetString(original.Content), ct);
+                var pdf = await htmlPdf.RenderAsync(EArchiveDocumentBranding.AddLogo(System.Text.Encoding.UTF8.GetString(original.Content)), ct);
                 return new(await CacheOfficialPdfAsync(invoice, pdf, ct), FromProvider: true);
             }
             catch (IntegrationUnavailableException ex)

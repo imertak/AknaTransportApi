@@ -263,6 +263,9 @@ public class GibPortalInvoiceTests(GibPortalApiFactory factory) : IClassFixture<
         var gibPdf = System.Text.Encoding.UTF8.GetString(mail.Attachments.First(a => a.FileName.StartsWith("e-Arsiv_Fatura_")).Content);
         Assert.StartsWith("%PDF", gibPdf);
         Assert.Contains($"e-Arşiv fatura {issued.EArchiveReference}", gibPdf);
+        // AKNA logosu belgenin önüne eklenir; GİB içeriği aynen kalır.
+        Assert.Contains("<svg", gibPdf);
+        Assert.True(gibPdf.IndexOf("<svg", StringComparison.Ordinal) < gibPdf.IndexOf("e-Arşiv fatura", StringComparison.Ordinal));
     }
 
     [Fact]
