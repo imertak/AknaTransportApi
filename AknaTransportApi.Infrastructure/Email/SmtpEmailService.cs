@@ -28,7 +28,12 @@ public sealed class SmtpEmailService(IOptions<EmailOptions> options, ILogger<Smt
 
         var body = new BodyBuilder { HtmlBody = message.HtmlBody, TextBody = message.TextBody };
         foreach (var attachment in message.Attachments)
-            body.Attachments.Add(attachment.FileName, attachment.Content, ContentType.Parse(attachment.ContentType));
+        {
+            if (attachment.ContentId is { } cid)
+                body.LinkedResources.Add(attachment.FileName, attachment.Content, ContentType.Parse(attachment.ContentType)).ContentId = cid;
+            else
+                body.Attachments.Add(attachment.FileName, attachment.Content, ContentType.Parse(attachment.ContentType));
+        }
         mime.Body = body.ToMessageBody();
 
         if (UsePickup)

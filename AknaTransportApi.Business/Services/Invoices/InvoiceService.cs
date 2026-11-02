@@ -15,6 +15,7 @@ public sealed class InvoiceService(
     INumberGenerator numberGenerator,
     IEArchiveInvoiceService eArchive,
     IDraftInvoicePdfGenerator draftPdf,
+    IHtmlPdfRenderer htmlPdf,
     IJobReportPdfGenerator jobReportPdf,
     IVehicleTypeService vehicleTypes,
     IFileStorage fileStorage,
@@ -368,23 +369,46 @@ public sealed class InvoiceService(
         });
     }
 
-    public async Task<byte[]> GetOfficialPdfAsync(Guid id, CancellationToken ct)
+    public async Task<byte[]> GetOfficialPdfAsync(Guid id, CancellationToken ct) => (await GetOfficialDocumentAsync(id, ct)).Content;
+
+    public async Task<OfficialInvoicePdf> GetOfficialDocumentAsync(Guid id, CancellationToken ct)
     {
         var invoice = await invoices.GetByIdAsync(id, ct) ?? throw NotFoundException.For("Fatura");
         if (invoice.Status != InvoiceStatus.Issued || string.IsNullOrEmpty(invoice.EArchiveReference))
             throw new ConflictException("Resmi fatura PDF'i yalnızca kesilmiş faturalar için mevcuttur.");
 
-        if (invoice.InvoicePdfPath is { } path && await fileStorage.ReadAsync(path, ct) is { } cached) return cached;
+        // Depoda yalnızca sağlayıcının belgesinden üretilen PDF'ler saklanır.
+        if (invoice.InvoicePdfPath is { } path && await fileStorage.ReadAsync(path, ct) is { } cached) return new(cached, FromProvider: true);
 
-        // GİB portalı PDF vermez: kesilmiş faturanın bilgileri (GİB numarası, ETTN) ile e-Arşiv fatura PDF'i üretilir.
-        // Resmi görüntü /earchive/view ile portaldan alınabilir.
-        if (!eArchive.IsConfigured || !eArchive.SupportsPdf)
+        if (eArchive.IsConfigured && eArchive.SupportsPdf)
         {
-            if (invoice.EArchiveProvider is null) throw new IntegrationUnavailableException("e-Arşiv sağlayıcısı yapılandırılmamış; resmi PDF alınamıyor.");
-            return await RenderPdfAsync(invoice, official: true, ct);
+            var pdf = await eArchive.GetPdfAsync(Key(invoice), ct);
+            if (pdf.Length == 0) throw new IntegrationUnavailableException("e-Arşiv sağlayıcısı boş PDF döndürdü.");
+            return new(await CacheOfficialPdfAsync(invoice, pdf, ct), FromProvider: true);
         }
-        var pdf = await eArchive.GetPdfAsync(Key(invoice), ct);
-        if (pdf.Length == 0) throw new IntegrationUnavailableException("e-Arşiv sağlayıcısı boş PDF döndürdü.");
+
+        // GİB portalı PDF vermez: portaldaki imzalı fatura görüntüsü (HTML) sunucudaki Chrome/Edge ile PDF'e çevrilir.
+        // Portala ulaşılamazsa istisna yükselir (outbox yeniden dener). Tarayıcı yoksa veya çeviri başarısızsa
+        // GİB numarası ve ETTN ile kendi e-Arşiv PDF'imiz üretilir.
+        if (eArchive.IsConfigured && htmlPdf.IsAvailable && await LoadEArchiveHtmlAsync(invoice, ct) is { } original)
+        {
+            try
+            {
+                var pdf = await htmlPdf.RenderAsync(System.Text.Encoding.UTF8.GetString(original.Content), ct);
+                return new(await CacheOfficialPdfAsync(invoice, pdf, ct), FromProvider: true);
+            }
+            catch (IntegrationUnavailableException ex)
+            {
+                logger.LogWarning(ex, "GİB belgesi PDF'e çevrilemedi; GİB no ve ETTN ile üretilen PDF kullanılıyor. InvoiceId: {InvoiceId}", invoice.Id);
+            }
+        }
+
+        if (invoice.EArchiveProvider is null) throw new IntegrationUnavailableException("e-Arşiv sağlayıcısı yapılandırılmamış; resmi PDF alınamıyor.");
+        return new(await RenderPdfAsync(invoice, official: true, ct), FromProvider: false);
+    }
+
+    private async Task<byte[]> CacheOfficialPdfAsync(Invoice invoice, byte[] pdf, CancellationToken ct)
+    {
         invoice.InvoicePdfPath = await fileStorage.SaveAsync("invoices", $"{invoice.Id:N}.pdf", pdf, ct);
         await unitOfWork.SaveChangesAsync(ct);
         return pdf;
@@ -556,9 +580,23 @@ public sealed class InvoiceService(
         if (invoice.EArchiveReference is null || invoice.Status is not (InvoiceStatus.Pending or InvoiceStatus.Issued))
             throw new ConflictException("Bu fatura için e-Arşiv belgesi yok.");
         if (!eArchive.IsConfigured) throw new IntegrationUnavailableException("e-Arşiv sağlayıcısı yapılandırılmamış.");
-        var html = await eArchive.GetHtmlAsync(Key(invoice), signed: invoice.Status == InvoiceStatus.Issued, ct)
-                   ?? throw new IntegrationUnavailableException($"{eArchive.ProviderName} belge görüntüsü sağlamıyor; PDF'i kullanın.");
-        return new FileDownload(System.Text.Encoding.UTF8.GetBytes(html), $"e-Arsiv-{SafeName(invoice.EArchiveInvoiceNumber ?? invoice.InvoiceNumber)}.html", "text/html; charset=utf-8");
+        return await LoadEArchiveHtmlAsync(invoice, ct)
+               ?? throw new IntegrationUnavailableException($"{eArchive.ProviderName} belge görüntüsü sağlamıyor; PDF'i kullanın.");
+    }
+
+    public async Task<FileDownload?> GetIssuedEArchiveDocumentAsync(Guid id, CancellationToken ct)
+    {
+        var invoice = await invoices.QueryAsNoTracking().FirstOrDefaultAsync(i => i.Id == id, ct) ?? throw NotFoundException.For("Fatura");
+        if (invoice.Status != InvoiceStatus.Issued || invoice.EArchiveReference is null || !eArchive.IsConfigured) return null;
+        return await LoadEArchiveHtmlAsync(invoice, ct);
+    }
+
+    private async Task<FileDownload?> LoadEArchiveHtmlAsync(Invoice invoice, CancellationToken ct)
+    {
+        var html = await eArchive.GetHtmlAsync(Key(invoice), signed: invoice.Status == InvoiceStatus.Issued, ct);
+        return html is null
+            ? null
+            : new FileDownload(System.Text.Encoding.UTF8.GetBytes(html), $"e-Arsiv_Fatura_{SafeName(invoice.EArchiveInvoiceNumber ?? invoice.InvoiceNumber)}.html", "text/html; charset=utf-8");
     }
 
     private async Task<Invoice> LoadPendingPortalInvoiceAsync(Guid id, CancellationToken ct)

@@ -60,3 +60,17 @@ public sealed class FakeEArchiveAdapter : IEArchiveProviderAdapter
     public Task<EArchiveCancelResult> CancelAsync(EArchiveDocumentKey key, string reason, CancellationToken cancellationToken) =>
         Task.FromResult(new EArchiveCancelResult(true, null));
 }
+
+/// <summary>Tarayıcı yerine geçer: HTML'i kaydeder ve "%PDF" ile başlayan sahte bir PDF döndürür.</summary>
+public sealed class FakeHtmlPdfRenderer : IHtmlPdfRenderer
+{
+    public bool Available { get; set; } = true;
+    public ConcurrentQueue<string> Rendered { get; } = new();
+    public bool IsAvailable => Available;
+
+    public Task<byte[]> RenderAsync(string html, CancellationToken ct)
+    {
+        Rendered.Enqueue(html);
+        return Task.FromResult(System.Text.Encoding.UTF8.GetBytes("%PDF-1.4 gib " + html));
+    }
+}

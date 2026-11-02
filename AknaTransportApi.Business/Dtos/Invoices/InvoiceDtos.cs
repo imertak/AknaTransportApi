@@ -141,4 +141,6 @@ public sealed class InvoiceQuery : PagedQuery
     public string? Search { get; set; }
 }
 
+public sealed record OfficialInvoicePdf(byte[] Content, bool FromProvider);
+
 public sealed record FileDownload(byte[] Content, string FileName, string ContentType = "application/pdf");

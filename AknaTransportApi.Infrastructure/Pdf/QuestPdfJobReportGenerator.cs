@@ -54,8 +54,8 @@ public sealed class QuestPdfJobReportGenerator(IBusinessCalendar calendar) : IJo
             {
                 row.RelativeItem().AlignBottom().Column(left =>
                 {
-                    left.Item().Text("AKNA TRANSPORT").FontSize(16).ExtraBold().LetterSpacing(0.15f);
-                    left.Item().PaddingTop(3).Text(d.Title).FontSize(7.5f).SemiBold().FontColor(Muted).LetterSpacing(0.18f);
+                    left.Item().Row(r => r.AutoItem().Element(c => PdfBrand.Logo(c)));
+                    left.Item().PaddingTop(6).Text(d.Title).FontSize(7.5f).SemiBold().FontColor(Muted).LetterSpacing(0.18f);
                     if (!string.IsNullOrWhiteSpace(d.CustomerName))
                         left.Item().PaddingTop(6).Text(t =>
                         {

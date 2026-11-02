@@ -168,7 +168,10 @@ public class InvoiceTests(AknaApiFactory factory) : IClassFixture<AknaApiFactory
         Assert.Contains("Taslağı", mail.Subject);
         Assert.Contains("TASLAK", mail.HtmlBody);
         Assert.Equal(["cc@taslak.example"], mail.Cc);
-        Assert.Equal([$"Fatura_Taslagi_{invoice.InvoiceNumber}.pdf", $"Is_Dokumu_{invoice.InvoiceNumber}.pdf"], mail.Attachments.Select(a => a.FileName));
+        Assert.Equal([$"Fatura_Taslagi_{invoice.InvoiceNumber}.pdf", $"Is_Dokumu_{invoice.InvoiceNumber}.pdf"], mail.Attachments.Where(a => a.ContentId is null).Select(a => a.FileName));
+        // Başlıktaki logo satır içi görsel olarak eklenir.
+        Assert.Contains(mail.Attachments, a => a.ContentId == "akna-logo" && a.ContentType == "image/png");
+        Assert.Contains("cid:akna-logo", mail.HtmlBody);
 
         // Fatura taslak kalır; tekrar gönderilebilir.
         var after = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Get, $"/api/invoices/{invoice.Id}", token: admin);
@@ -182,7 +185,7 @@ public class InvoiceTests(AknaApiFactory factory) : IClassFixture<AknaApiFactory
         // Kesildiğinde otomatik e-posta elle gönderimlerden bağımsız olarak gider.
         await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{invoice.Id}/issue", token: admin);
         await ProcessOutboxAsync();
-        Assert.Contains(factory.Email.Sent, m => m.To == email && m.Attachments.Any(a => a.FileName.StartsWith("Fatura-")));
+        Assert.Contains(factory.Email.Sent, m => m.To == email && m.Attachments.Any(a => a.FileName.StartsWith("e-Arsiv_Fatura_")));
     }
 
     [Fact]
@@ -255,8 +258,9 @@ public class InvoiceTests(AknaApiFactory factory) : IClassFixture<AknaApiFactory
         Assert.NotNull(detail.Email.SentAt);
 
         var mail = Assert.Single(mails.Where(m => m.TextBody.Contains("AKNA Transport")).Take(1));
-        Assert.Equal(2, mail.Attachments.Count);
-        Assert.All(mail.Attachments, a => Assert.StartsWith("%PDF", System.Text.Encoding.ASCII.GetString(a.Content, 0, 4)));
+        var files = mail.Attachments.Where(a => a.ContentId is null).ToList();
+        Assert.Equal(2, files.Count);
+        Assert.All(files, a => Assert.StartsWith("%PDF", System.Text.Encoding.ASCII.GetString(a.Content, 0, 4)));
 
         // Gönderilmiş e-posta yeniden kuyruğa alınamaz.
         var (resend, _) = await _client.SendAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{invoice.Id}/resend-email", token: admin);

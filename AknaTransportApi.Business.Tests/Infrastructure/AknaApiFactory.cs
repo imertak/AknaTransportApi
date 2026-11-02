@@ -23,6 +23,7 @@ public class AknaApiFactory : WebApplicationFactory<Program>
 
     public FakeEmailService Email { get; } = new();
     public FakeEArchiveAdapter EArchive { get; } = new();
+    public FakeHtmlPdfRenderer HtmlPdf { get; } = new();
 
     /// <summary>false ise e-Arşiv sağlayıcısı yapılandırılmamış kabul edilir.</summary>
     protected virtual bool EArchiveConfigured => true;
@@ -67,6 +68,8 @@ public class AknaApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<IEmailService>();
             services.AddSingleton<IEmailService>(Email);
             services.AddSingleton<IEArchiveProviderAdapter>(EArchive);
+            services.RemoveAll<IHtmlPdfRenderer>();
+            services.AddSingleton<IHtmlPdfRenderer>(HtmlPdf);
             ConfigureExtraServices(services);
         });
     }

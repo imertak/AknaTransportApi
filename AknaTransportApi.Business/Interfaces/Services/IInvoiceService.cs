@@ -22,6 +22,12 @@ public interface IInvoiceService
     /// <summary>Sağlayıcıdaki imzalanmamış taslağı siler ve faturayı düzenlenebilir taslağa döndürür.</summary>
     Task<InvoiceDetailDto> DiscardEArchiveDraftAsync(Guid id, CancellationToken ct);
 
+    /// <summary>
+    /// Kesilmiş faturanın e-Arşiv sağlayıcısındaki orijinal belgesi (GİB portalında imzalı fatura görüntüsü, HTML).
+    /// Sağlayıcı belge görüntüsü vermiyorsa veya fatura kesilmemişse null.
+    /// </summary>
+    Task<FileDownload?> GetIssuedEArchiveDocumentAsync(Guid id, CancellationToken ct);
+
     /// <summary>Sağlayıcının belge görüntüsü (GİB portalı HTML).</summary>
     Task<FileDownload> GetEArchiveViewAsync(Guid id, CancellationToken ct);
 
@@ -35,6 +41,12 @@ public interface IInvoiceService
 
     /// <summary>Gerçek e-Arşiv PDF'ini depodan veya sağlayıcıdan getirir (yalnızca Issued).</summary>
     Task<byte[]> GetOfficialPdfAsync(Guid id, CancellationToken ct);
+
+    /// <summary>
+    /// Kesilmiş faturanın resmi PDF'i. FromProvider: PDF sağlayıcının belgesinden geldi (GİB portalında imzalı görüntünün
+    /// PDF'e çevrilmiş hali); false ise GİB numarası ve ETTN ile bizim ürettiğimiz PDF'tir.
+    /// </summary>
+    Task<OfficialInvoicePdf> GetOfficialDocumentAsync(Guid id, CancellationToken ct);
 
     /// <summary>Faturadaki işlerin dökümü (müşteriye gönderilen rapor yalnızca bu işleri içerir).</summary>
     Task<JobReportDocument> BuildJobReportAsync(Guid id, CancellationToken ct);
