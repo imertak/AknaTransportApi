@@ -214,12 +214,18 @@ public sealed class InvoiceService(
         EArchiveSendResult result;
         try
         {
-            result = await eArchive.SendInvoiceAsync(BuildRequest(invoice, customer), ct);
+            // İstek iptali (uygulama bağlantıyı kapattı) gönderimi yarıda kesmesin: süre sınırı sağlayıcı
+            // istemcisinin zaman aşımıdır (EArchive:TimeoutSeconds). Böylece fatura Pending'de takılı kalmaz.
+            result = await eArchive.SendInvoiceAsync(BuildRequest(invoice, customer), CancellationToken.None);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
-            logger.LogError(ex, "e-Arşiv gönderimi başarısız. InvoiceId: {InvoiceId}", id);
-            invoice.MarkFailed($"e-Arşiv sağlayıcısına gönderim başarısız: {ex.Message}");
+            // HttpClient zaman aşımı TaskCanceledException (OperationCanceledException) fırlatır; o da hatadır.
+            var timedOut = ex is OperationCanceledException or TimeoutException;
+            logger.LogError(ex, "e-Arşiv gönderimi başarısız{Reason}. InvoiceId: {InvoiceId}", timedOut ? " (zaman aşımı)" : string.Empty, id);
+            invoice.MarkFailed(timedOut
+                ? "e-Arşiv sağlayıcısı zamanında yanıt vermedi (zaman aşımı). Portal erişilebilir olduğunda tekrar gönderin; önce portalda bu fatura için imzasız taslak oluşup oluşmadığını kontrol edin."
+                : $"e-Arşiv sağlayıcısına gönderim başarısız: {ex.Message}");
             await unitOfWork.SaveChangesAsync(CancellationToken.None);
             return await GetAsync(id, CancellationToken.None);
         }

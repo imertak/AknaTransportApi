@@ -254,6 +254,7 @@ POST /api/jobs
 - Duraklar `transport_job_stops` tablosunda tutulur; her tip için `Sequence` 1'den başlar ve `(TransportJobId, StopType, Sequence)` benzersizdir. En az bir yükleme ve bir teslimat noktası zorunludur.
 - `routeDescription` otomatik üretilir: önce tüm yüklemeler, sonra tüm teslimatlar `" - "` ile birleştirilir. Duraklar değişince yeniden üretilir; kullanıcının yazdığı `description` ayrı tutulur ve kaybolmaz. PDF ve fatura satırlarında `güzergâh (açıklama)` biçiminde gösterilir.
 - `pickupAddress`/`deliveryAddress` alanları ilk yükleme ve son teslimat noktasının özetidir (liste, arama, müşteri takibi). Eski istemciler `stops` göndermeden bu iki alanla iş oluşturmaya devam edebilir.
+- Yetkili kişiler: `contacts: [{ role, name, phoneNumber }]` (en fazla 10; `role` serbest metin, ör. "Yük sahibi", "Teslim alan"). Güncellemede `contacts` gönderilmezse mevcut liste korunur, boş liste hepsini siler. Yanıtta `contacts` sırayla döner.
 - Yanıtta `stops`, `assignedVehicleId`, `assignedVehiclePlate` ve `billingStatus` alanları bulunur. `billingStatus` ayrı bir kolon değildir; işin bağlı olduğu faturanın durumundan türetilir (fatura yok → `NotInvoiced`, Draft/Pending/Failed → `InDraft`, Issued → `Invoiced`).
 
 ### Araçlar — `/api/vehicles`

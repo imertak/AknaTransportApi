@@ -23,8 +23,16 @@ public sealed class FakeGibPortal : HttpMessageHandler
     public List<string> Commands { get; } = [];
     public int ActiveSessions { get; private set; }
 
+    /// <summary>true iken portal yanıt vermez: HttpClient zaman aşımıyla aynı istisna fırlatılır.</summary>
+    public bool SimulateTimeout { get; set; }
+
+    /// <summary>Son istekte gönderilen User-Agent.</summary>
+    public string? LastUserAgent { get; private set; }
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        LastUserAgent = request.Headers.UserAgent.ToString();
+        if (SimulateTimeout) throw new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout.", new TimeoutException());
         var form = (await request.Content!.ReadAsStringAsync(cancellationToken)).Split('&', StringSplitOptions.RemoveEmptyEntries)
             .Select(p => p.Split('=', 2))
             .ToDictionary(p => WebUtility.UrlDecode(p[0]), p => p.Length > 1 ? WebUtility.UrlDecode(p[1]) : "");

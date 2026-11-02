@@ -80,6 +80,7 @@ public sealed class JobService(
             };
             job.Apply(request);
             job.SetStops(request.ResolveStops(), now);
+            job.SetContacts(request.ResolveContacts(), now);
             job.JobNumber = await numberGenerator.NextJobNumberAsync(request.JobDate, token);
             job.Initialize(currentUser.UserId, driverId, now, driverId is null ? null : request.AssignedVehicleId);
             jobs.Add(job);
@@ -94,13 +95,15 @@ public sealed class JobService(
     public async Task<JobDetailDto> UpdateAsync(Guid id, UpdateJobRequest request, CancellationToken ct)
     {
         EnsureAdmin();
-        var job = await jobs.Query().Include(j => j.Stops).FirstOrDefaultAsync(j => j.Id == id, ct) ?? throw NotFoundException.For("İş");
+        var job = await jobs.Query().Include(j => j.Stops).Include(j => j.Contacts).FirstOrDefaultAsync(j => j.Id == id, ct) ?? throw NotFoundException.For("İş");
         job.EnsureEditable();
         if (job.CustomerId != request.CustomerId) await customerService.EnsureExistsAsync(request.CustomerId, ct);
         job.CustomerId = request.CustomerId;
         job.Apply(request);
         // Duraklar değiştiğinde güzergâh metni yeniden üretilir; elle yazılan açıklama korunur.
         job.SetStops(request.ResolveStops(), Now);
+        // Eski istemciler kişi listesini göndermez; o durumda mevcut kişiler korunur.
+        if (request.Contacts is not null) job.SetContacts(request.ResolveContacts(), Now);
         job.ConcurrencyStamp = Guid.NewGuid();
         await unitOfWork.SaveChangesAsync(ct);
         return await GetAsync(id, ct);

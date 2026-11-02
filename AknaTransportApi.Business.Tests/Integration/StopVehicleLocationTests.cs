@@ -291,4 +291,42 @@ public class StopVehicleLocationTests(AknaApiFactory factory) : IClassFixture<Ak
         {
             PlateNumber = $"34 T {Random.Shared.Next(10000, 99999)}", Brand = "Ford", Model = "Transit", VehicleType = VehicleType.Panelvan,
         }, admin);
+
+    [Fact]
+    public async Task Job_keeps_multiple_contacts_and_update_without_contacts_keeps_them()
+    {
+        var admin = await _client.AdminTokenAsync();
+        var customer = await _client.CreateCustomerAsync(admin);
+        var request = MultiStopJob(customer.Id);
+        request.Contacts =
+        [
+            new JobContactRequest { Role = "Yük sahibi", Name = "Ali Veli", PhoneNumber = "0532 111 22 33" },
+            new JobContactRequest { Role = "Teslim alan", PhoneNumber = "+90 212 000 00 00" },
+        ];
+        var job = (await _client.OkAsync<JobDetailDto>(HttpMethod.Post, "/api/jobs", request, admin)).Job;
+        Assert.Equal(["Yük sahibi", "Teslim alan"], job.Contacts.Select(c => c.Role));
+        Assert.Equal([1, 2], job.Contacts.Select(c => c.Sequence));
+        Assert.Null(job.Contacts[1].Name);
+
+        UpdateJobRequest Update(List<JobContactRequest>? contacts) => new()
+        {
+            CustomerId = customer.Id, JobDate = request.JobDate, StoreName = request.StoreName, VehicleType = request.VehicleType,
+            Price = request.Price, Stops = request.Stops, Contacts = contacts,
+        };
+
+        // Eski istemci kişi göndermezse liste korunur.
+        var kept = (await _client.OkAsync<JobDetailDto>(HttpMethod.Put, $"/api/jobs/{job.Id}", Update(null), admin)).Job;
+        Assert.Equal(2, kept.Contacts.Count);
+
+        var replaced = (await _client.OkAsync<JobDetailDto>(HttpMethod.Put, $"/api/jobs/{job.Id}",
+            Update([new JobContactRequest { Role = "Depo sorumlusu", PhoneNumber = "0533 444 55 66" }]), admin)).Job;
+        Assert.Equal("Depo sorumlusu", Assert.Single(replaced.Contacts).Role);
+
+        var cleared = (await _client.OkAsync<JobDetailDto>(HttpMethod.Put, $"/api/jobs/{job.Id}", Update([]), admin)).Job;
+        Assert.Empty(cleared.Contacts);
+
+        var (status, _) = await _client.SendAsync<JobDetailDto>(HttpMethod.Put, $"/api/jobs/{job.Id}",
+            Update([new JobContactRequest { Role = "Yük sahibi", PhoneNumber = "abc" }]), admin);
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+    }
 }
