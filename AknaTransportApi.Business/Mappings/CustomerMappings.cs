@@ -7,7 +7,7 @@ public static class CustomerMappings
 {
     public static readonly Expression<Func<Customer, CustomerDto>> Projection = c => new CustomerDto(
         c.Id, c.CompanyName, c.ContactPerson, c.PhoneNumber, c.Email, c.TaxOffice, c.TaxNumber, c.Address, c.Description,
-        c.IsActive, c.CreatedAt, c.UpdatedAt);
+        c.IsActive, c.CreatedAt, c.UpdatedAt, c.AdditionalEmails);
 
     private static readonly Func<Customer, CustomerDto> Compiled = Projection.Compile();
 
@@ -18,7 +18,16 @@ public static class CustomerMappings
         customer.CompanyName = request.CompanyName.Trim();
         customer.ContactPerson = request.ContactPerson.TrimOrNull();
         customer.PhoneNumber = request.PhoneNumber.TrimOrNull();
-        customer.Email = request.Email.TrimOrNull();
+        if (request.Emails is not null)
+        {
+            var emails = Customer.MergeEmails(null, string.Join(Customer.EmailSeparator, request.Emails));
+            customer.Email = emails.FirstOrDefault();
+            customer.AdditionalEmails = emails.Count > 1 ? string.Join(Customer.EmailSeparator, emails.Skip(1)) : null;
+        }
+        else
+        {
+            customer.Email = request.Email.TrimOrNull();
+        }
         customer.TaxOffice = request.TaxOffice.TrimOrNull();
         customer.TaxNumber = request.TaxNumber.TrimOrNull();
         customer.Address = request.Address.TrimOrNull();

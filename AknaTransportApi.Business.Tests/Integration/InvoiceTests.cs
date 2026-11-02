@@ -115,6 +115,38 @@ public class InvoiceTests(AknaApiFactory factory) : IClassFixture<AknaApiFactory
     }
 
     [Fact]
+    public async Task Customer_with_multiple_emails_gets_invoice_email_with_cc()
+    {
+        var admin = await _client.AdminTokenAsync();
+        var customer = await _client.OkAsync<CustomerDto>(HttpMethod.Post, "/api/customers", new CustomerRequest
+        {
+            CompanyName = $"Çoklu {Guid.NewGuid():N}"[..16],
+            Emails = ["muhasebe@coklu.example", " satinalma@coklu.example ", "", "MUHASEBE@coklu.example", "depo@coklu.example"],
+        }, admin);
+        Assert.Equal(["muhasebe@coklu.example", "satinalma@coklu.example", "depo@coklu.example"], customer.Emails);
+        Assert.Equal("muhasebe@coklu.example", customer.Email);
+
+        // Eski istemci yalnızca Email gönderirse ek adresler korunur.
+        var updated = await _client.OkAsync<CustomerDto>(HttpMethod.Put, $"/api/customers/{customer.Id}",
+            new CustomerRequest { CompanyName = customer.CompanyName, Email = "yeni@coklu.example" }, admin);
+        Assert.Equal(["yeni@coklu.example", "satinalma@coklu.example", "depo@coklu.example"], updated.Emails);
+
+        var (status, body) = await _client.SendAsync<CustomerDto>(HttpMethod.Put, $"/api/customers/{customer.Id}",
+            new CustomerRequest { CompanyName = customer.CompanyName, Emails = ["yeni@coklu.example", "gecersiz-adres"] }, admin);
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Contains(body!.Errors!, e => e.Message.Contains("gecersiz-adres"));
+
+        var job = await _client.CreateJobAsync(admin, customer.Id, assignToMe: true);
+        await _client.RunToCompletionAsync(job.Job.Id, admin);
+        var invoice = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest { JobIds = [job.Job.Id] }, admin);
+        await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{invoice.Id}/issue", token: admin);
+        await ProcessOutboxAsync();
+
+        var mail = Assert.Single(factory.Email.Sent, m => m.To == "yeni@coklu.example");
+        Assert.Equal(["satinalma@coklu.example", "depo@coklu.example"], mail.Cc);
+    }
+
+    [Fact]
     public async Task Invoice_requires_valid_customer_email()
     {
         var admin = await _client.AdminTokenAsync();

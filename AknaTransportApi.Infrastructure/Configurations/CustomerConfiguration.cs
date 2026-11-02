@@ -13,6 +13,7 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         b.Property(x => x.ContactPerson).HasMaxLength(150);
         b.Property(x => x.PhoneNumber).HasMaxLength(30);
         b.Property(x => x.Email).HasMaxLength(200);
+        b.Property(x => x.AdditionalEmails).HasMaxLength(2000);
         b.Property(x => x.TaxOffice).HasMaxLength(100);
         b.Property(x => x.TaxNumber).HasMaxLength(11);
         b.Property(x => x.Address).HasMaxLength(500);

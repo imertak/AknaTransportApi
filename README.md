@@ -124,7 +124,9 @@ Veritabanı notları:
 | `Jwt__AccessTokenExpirationMinutes` | Hayır | Varsayılan 30 |
 | `Jwt__RefreshTokenExpirationDays` | Hayır | Varsayılan 30 |
 | `Seed__AdminEmail`, `Seed__AdminPassword` | İlk kurulumda | Aktif yönetici yoksa oluşturulur |
-| `Email__Host`, `Email__Port`, `Email__Username`, `Email__Password`, `Email__FromEmail`, `Email__FromName` | Fatura e-postası için | SMTP. `Email__Security`: Auto / StartTls / SslOnConnect / None |
+| `Email__Provider` | Fatura e-postası için | `Resend` veya `Smtp` (varsayılan) |
+| `Email__ResendApiKey` | Resend için | Resend panelinden alınan API anahtarı (`re_...`). `Email__FromEmail` adresinin alan adı Resend'de doğrulanmış olmalıdır. |
+| `Email__Host`, `Email__Port`, `Email__Username`, `Email__Password`, `Email__FromEmail`, `Email__FromName` | Fatura e-postası için | `Email__FromEmail` / `Email__FromName` her iki sağlayıcıda kullanılır; diğerleri yalnızca SMTP. `Email__Security`: Auto / StartTls / SslOnConnect / None |
 | `Sms__Provider`, `Sms__ApiUrl`, `Sms__Username`, `Sms__Password`, `Sms__ApiKey`, `Sms__Sender` | SMS için | Bkz. [SMS](#sms-ile-kullanıcı-şifresi) |
 | `EArchive__Provider` | Gerçek fatura için | `GibPortal` (GİB e-Arşiv portalı, yerleşik) veya eklenen özel entegratörün adı. Boşsa e-Arşiv kapalıdır. |
 | `EArchive__Username`, `EArchive__Password` | GİB portalı için | e-Arşiv portalı kullanıcı kodu ve şifresi (İnteraktif Vergi Dairesi'nden alınır). |
@@ -477,5 +479,5 @@ Not: Proje `net9.0` hedefler. Yalnızca .NET 10 SDK/runtime kurulu bir makinede 
 |---|---|---|
 | e-Arşiv faturası | Adapter altyapısı hazır, somut sağlayıcı yok. Fatura Draft'ta kalır. | Entegratör seçimi (Uyumsoft, Logo, Sovos, QNB eFinans vb.), API dokümantasyonu, test hesabı, `EArchive__*` değerleri |
 | SMS | Adapter altyapısı hazır, somut sağlayıcı yok. Geçici şifre yöneticiye bir kez gösterilir. | SMS firması (ör. Netgsm, İleti Merkezi), API bilgileri, onaylı SMS başlığı |
-| SMTP | MailKit ile çalışır durumda; yalnızca sunucu bilgileri gerekir. Development'ta `mail-drop/` klasörüne `.eml` yazılır. | `Email__*` değerleri |
+| E-posta (Resend / SMTP) | Resend HTTP API'si veya MailKit SMTP ile çalışır durumda. Müşterinin ek adresleri CC olarak eklenir. Development'ta (SMTP modunda) `mail-drop/` klasörüne `.eml` yazılır. | `Email__Provider=Resend` + `Email__ResendApiKey` + doğrulanmış alan adındaki `Email__FromEmail` |
 | Gerçek zamanlı konum (SignalR) | Genişleme noktası hazır (`ILocationBroadcaster`), ilk aşamada zorunlu değil. | — |

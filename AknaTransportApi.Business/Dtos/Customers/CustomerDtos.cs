@@ -15,7 +15,18 @@ public sealed record CustomerDto(
     string? Description,
     bool IsActive,
     DateTime CreatedAt,
-    DateTime? UpdatedAt);
+    DateTime? UpdatedAt,
+    [property: System.Text.Json.Serialization.JsonIgnore] string? AdditionalEmails = null)
+{
+    private readonly IReadOnlyList<string>? _emails;
+
+    /// <summary>Tüm e-posta adresleri; ilki ana adrestir (<see cref="Email"/>).</summary>
+    public IReadOnlyList<string> Emails
+    {
+        get => _emails ?? Customer.MergeEmails(Email, AdditionalEmails);
+        init => _emails = value;
+    }
+}
 
 /// <summary>Müşteri oluşturma / güncelleme isteği.</summary>
 public sealed class CustomerRequest
@@ -23,7 +34,10 @@ public sealed class CustomerRequest
     public string CompanyName { get; set; } = string.Empty;
     public string? ContactPerson { get; set; }
     public string? PhoneNumber { get; set; }
+    /// <summary>Eski istemciler için tek adres. <see cref="Emails"/> gönderilirse yok sayılır.</summary>
     public string? Email { get; set; }
+    /// <summary>Tüm e-posta adresleri; ilki ana adres olur. Gönderilmezse (null) Email kullanılır ve ek adresler korunur.</summary>
+    public List<string>? Emails { get; set; }
     public string? TaxOffice { get; set; }
     public string? TaxNumber { get; set; }
     public string? Address { get; set; }

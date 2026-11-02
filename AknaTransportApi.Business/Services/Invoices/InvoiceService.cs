@@ -282,7 +282,7 @@ public sealed class InvoiceService(
             {
                 InvoiceId = id,
                 Type = EmailType.InvoiceDelivery,
-                RecipientEmail = customer.Email!.Trim(),
+                RecipientEmail = RecipientList(customer),
                 Subject = EmailTemplates.InvoiceSubject,
                 CreatedAt = now,
             };
@@ -548,7 +548,7 @@ public sealed class InvoiceService(
         {
             InvoiceId = invoice.Id,
             Type = EmailType.InvoiceDelivery,
-            RecipientEmail = customer.Email!.Trim(),
+            RecipientEmail = RecipientList(customer),
             Subject = EmailTemplates.InvoiceSubject,
             Status = EmailStatus.Pending,
             CreatedAt = now,
@@ -579,6 +579,10 @@ public sealed class InvoiceService(
         }
         return selected;
     }
+
+    /// <summary>Fatura e-postasının alıcıları: ana adres ve geçerli ek adresler, "; " ile ayrılmış (ilki alıcı, diğerleri CC).</summary>
+    private static string RecipientList(Customer customer) =>
+        string.Join("; ", customer.AllEmails().Where(Text.IsValidEmail));
 
     private async Task<Customer> LoadCustomerForInvoiceAsync(Guid customerId, CancellationToken ct)
     {

@@ -31,6 +31,10 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AdditionalEmails")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
                     b.Property<string>("Address")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -141,8 +145,8 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("RecipientEmail")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasMaxLength(2200)
+                        .HasColumnType("character varying(2200)");
 
                     b.Property<DateTime?>("SentAt")
                         .HasColumnType("timestamp with time zone");
