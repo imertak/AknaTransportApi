@@ -36,7 +36,7 @@ public class TransportJob : Entity, IHasTimestamps
 
     public DateOnly JobDate { get; set; }
     public string StoreName { get; set; } = string.Empty;
-    public VehicleType VehicleType { get; set; }
+    public string VehicleType { get; set; } = string.Empty;
     /// <summary>İlk yükleme noktası (liste, arama ve harita için özet). Duraklardan otomatik doldurulur.</summary>
     public string PickupAddress { get; private set; } = string.Empty;
     /// <summary>Son teslimat noktası (liste, arama ve müşteri takibi için özet). Duraklardan otomatik doldurulur.</summary>

@@ -12,7 +12,7 @@ public sealed record JobDto(
     string? AssignedDriverName,
     DateOnly JobDate,
     string StoreName,
-    VehicleType VehicleType,
+    string VehicleType,
     string PickupAddress,
     string DeliveryAddress,
     double? PickupLatitude,
@@ -80,7 +80,7 @@ public class JobRequestBase
 {
     public DateOnly JobDate { get; set; }
     public string StoreName { get; set; } = string.Empty;
-    public VehicleType VehicleType { get; set; }
+    public string VehicleType { get; set; } = string.Empty;
 
     /// <summary>
     /// Yükleme ve teslimat noktaları; her tip kendi içinde gönderildiği sırayla saklanır.
@@ -184,7 +184,7 @@ public sealed class JobQuery : PagedQuery
     public Guid? DriverId { get; set; }
     /// <summary>Birden fazla durum için ?status=Pending&amp;status=Assigned</summary>
     public List<JobStatus>? Status { get; set; }
-    public VehicleType? VehicleType { get; set; }
+    public string? VehicleType { get; set; }
     public string? StoreName { get; set; }
     /// <summary>İş numarası, mağaza, adres veya açıklamada arama.</summary>
     public string? Search { get; set; }

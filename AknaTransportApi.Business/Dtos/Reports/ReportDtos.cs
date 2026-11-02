@@ -20,7 +20,7 @@ public class JobReportQuery
     public Guid? CustomerId { get; set; }
     public Guid? DriverId { get; set; }
     public string? StoreName { get; set; }
-    public VehicleType? VehicleType { get; set; }
+    public string? VehicleType { get; set; }
     public ReportStatusScope Scope { get; set; } = ReportStatusScope.Completed;
 }
 
@@ -39,7 +39,7 @@ public sealed record JobReportItemDto(
     Guid CustomerId,
     string CustomerName,
     string StoreName,
-    VehicleType VehicleType,
+    string VehicleType,
     string Description,
     decimal Price,
     string Currency,

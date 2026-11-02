@@ -16,6 +16,7 @@ public sealed class InvoiceService(
     IEArchiveInvoiceService eArchive,
     IDraftInvoicePdfGenerator draftPdf,
     IJobReportPdfGenerator jobReportPdf,
+    IVehicleTypeService vehicleTypes,
     IFileStorage fileStorage,
     ICurrentUser currentUser,
     IOptions<AppOptions> appOptions,
@@ -368,6 +369,8 @@ public sealed class InvoiceService(
             .OrderBy(x => x.Job!.JobDate).ThenBy(x => x.Job!.JobNumber)
             .Select(x => new JobReportRow(x.Job!.JobDate, x.Job.StoreName, x.Job.VehicleType, (x.Job.RouteDescription == "" ? x.Job.Description : x.Job.Description == "" ? x.Job.RouteDescription : x.Job.RouteDescription + " (" + x.Job.Description + ")"), x.Job.Price, header.CustomerName))
             .ToListAsync(ct);
+        var labels = await vehicleTypes.GetLabelsAsync(ct);
+        rows = rows.Select(r => r with { VehicleType = labels.GetValueOrDefault(r.VehicleType, r.VehicleType) }).ToList();
 
         return new JobReportDocument(
             "NAKLİYE İŞLERİ DÖKÜMÜ",

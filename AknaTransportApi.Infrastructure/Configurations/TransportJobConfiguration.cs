@@ -11,7 +11,7 @@ public sealed class TransportJobConfiguration : IEntityTypeConfiguration<Transpo
         b.HasKey(x => x.Id);
         b.Property(x => x.JobNumber).HasMaxLength(30).IsRequired();
         b.Property(x => x.StoreName).HasMaxLength(200).IsRequired();
-        b.Property(x => x.VehicleType).HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.VehicleType).HasMaxLength(50).IsRequired();
         b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
         b.Property(x => x.PickupAddress).HasMaxLength(500).IsRequired();
         b.Property(x => x.DeliveryAddress).HasMaxLength(500).IsRequired();

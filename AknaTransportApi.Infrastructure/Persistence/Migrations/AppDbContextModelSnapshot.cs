@@ -688,8 +688,8 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("VehicleType")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.HasKey("Id");
 
@@ -893,8 +893,8 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("VehicleType")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.HasKey("Id");
 
@@ -904,6 +904,91 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("vehicles", (string)null);
+                });
+
+            modelBuilder.Entity("AknaTransportApi.Domain.Entities.VehicleTypeDefinition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("vehicle_types", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("0193a000-0000-7000-8000-000000000001"),
+                            Code = "Panelvan",
+                            CreatedAt = new DateTime(2026, 11, 2, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Panelvan",
+                            SortOrder = 10
+                        },
+                        new
+                        {
+                            Id = new Guid("0193a000-0000-7000-8000-000000000002"),
+                            Code = "SmallPanelvan",
+                            CreatedAt = new DateTime(2026, 11, 2, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Küçük Panelvan",
+                            SortOrder = 20
+                        },
+                        new
+                        {
+                            Id = new Guid("0193a000-0000-7000-8000-000000000003"),
+                            Code = "Pickup",
+                            CreatedAt = new DateTime(2026, 11, 2, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Kamyonet",
+                            SortOrder = 30
+                        },
+                        new
+                        {
+                            Id = new Guid("0193a000-0000-7000-8000-000000000004"),
+                            Code = "Truck",
+                            CreatedAt = new DateTime(2026, 11, 2, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Kamyon",
+                            SortOrder = 40
+                        },
+                        new
+                        {
+                            Id = new Guid("0193a000-0000-7000-8000-000000000005"),
+                            Code = "Other",
+                            CreatedAt = new DateTime(2026, 11, 2, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Diğer",
+                            SortOrder = 90
+                        });
                 });
 
             modelBuilder.Entity("AknaTransportApi.Domain.Entities.DriverVehicle", b =>

@@ -78,7 +78,7 @@ public sealed record ActiveJobLocationDto(
     JobStatus Status,
     string CustomerName,
     string StoreName,
-    VehicleType VehicleType,
+    string VehicleType,
     string PickupAddress,
     string DeliveryAddress,
     Guid? DriverId,

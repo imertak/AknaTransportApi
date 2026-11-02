@@ -10,7 +10,7 @@ public partial class Vehicle : Entity, IHasTimestamps
     public string PlateNumber { get; set; } = string.Empty;
     public string? Brand { get; set; }
     public string? Model { get; set; }
-    public VehicleType VehicleType { get; set; }
+    public string VehicleType { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
     public string? Description { get; set; }
     public DateTime CreatedAt { get; set; }

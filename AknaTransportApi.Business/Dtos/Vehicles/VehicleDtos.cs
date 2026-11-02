@@ -6,7 +6,7 @@ public sealed record VehicleDto(
     string PlateNumber,
     string? Brand,
     string? Model,
-    VehicleType VehicleType,
+    string VehicleType,
     bool IsActive,
     string? Description,
     Guid? DriverId,
@@ -20,7 +20,7 @@ public sealed class VehicleRequest
     public string PlateNumber { get; set; } = string.Empty;
     public string? Brand { get; set; }
     public string? Model { get; set; }
-    public VehicleType VehicleType { get; set; }
+    public string VehicleType { get; set; } = string.Empty;
     public string? Description { get; set; }
     /// <summary>Güncellemede kullanılır; yeni araçlar aktif oluşturulur.</summary>
     public bool IsActive { get; set; } = true;

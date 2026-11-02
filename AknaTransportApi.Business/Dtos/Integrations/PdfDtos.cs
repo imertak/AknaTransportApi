@@ -1,6 +1,6 @@
 namespace AknaTransportApi.Business.Dtos.Integrations;
 
-public sealed record JobReportRow(DateOnly Date, string StoreName, VehicleType VehicleType, string Description, decimal Price, string? CustomerName)
+public sealed record JobReportRow(DateOnly Date, string StoreName, string VehicleType, string Description, decimal Price, string? CustomerName)
 {
     /// <summary>Dökümdeki "Firma - Mağaza" metni; mağaza adı isteğe bağlıdır.</summary>
     public string PartyLabel => JobMappings.PartyLabel(CustomerName, StoreName);

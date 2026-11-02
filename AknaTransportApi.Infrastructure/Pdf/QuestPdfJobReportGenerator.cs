@@ -119,7 +119,7 @@ public sealed class QuestPdfJobReportGenerator(IBusinessCalendar calendar) : IJo
                     var shade = i % 2 == 1 ? Zebra : "#FFFFFF";
                     BodyCell(table.Cell(), shade).Text(PdfFormat.Date(r.Date));
                     BodyCell(table.Cell(), shade).Text(r.PartyLabel).SemiBold();
-                    BodyCell(table.Cell(), shade).Text(r.VehicleType.ToTurkish());
+                    BodyCell(table.Cell(), shade).Text(r.VehicleType);
                     BodyCell(table.Cell(), shade).Text(r.Description);
                     BodyCell(table.Cell(), shade).AlignRight().Text($"{PdfFormat.Money(r.Price, d.Currency, decimals: false)} + KDV").SemiBold();
                 }
