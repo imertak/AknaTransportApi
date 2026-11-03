@@ -15,7 +15,10 @@ public sealed class OutboxProcessor(
     IRepository<EmailLog> emailLogs,
     IRepository<Invoice> invoices,
     IRepository<User> users,
+    IRepository<Notification> notifications,
+    IRepository<PushDevice> pushDevices,
     IUnitOfWork unitOfWork,
+    IPushNotificationSender pushSender,
     IEmailService emailService,
     ISmsService smsService,
     IInvoiceService invoiceService,
@@ -72,6 +75,7 @@ public sealed class OutboxProcessor(
         OutboxMessageTypes.InvoiceEmail => SendInvoiceEmailAsync(OutboxWriter.Deserialize<InvoiceEmailPayload>(message.Payload), ct),
         OutboxMessageTypes.PasswordResetEmail => SendPasswordResetAsync(OutboxWriter.Deserialize<PasswordResetEmailPayload>(message.Payload), ct),
         OutboxMessageTypes.UserCredentialsSms => SendCredentialsSmsAsync(OutboxWriter.Deserialize<UserCredentialsSmsPayload>(message.Payload), ct),
+        OutboxMessageTypes.PushNotification => SendPushAsync(OutboxWriter.Deserialize<PushNotificationPayload>(message.Payload), ct),
         _ => throw new PermanentOutboxException($"Bilinmeyen outbox mesaj tipi: {message.Type}"),
     };
 
@@ -171,6 +175,38 @@ public sealed class OutboxProcessor(
         await smsService.SendAsync(new SmsMessage(payload.PhoneNumber,
             EmailTemplates.CredentialsSms(payload.FullName, payload.Email, payload.TemporaryPassword, payload.IsReset)), ct);
         logger.LogInformation("Geçici şifre SMS'i gönderildi. UserId: {UserId}", payload.UserId);
+    }
+
+    /// <summary>
+    /// Bildirimi kullanıcının kayıtlı tüm cihazlarına gönderir. Cihaz yoksa veya push kapalıysa sessizce geçilir;
+    /// bildirim uygulama içi listede zaten görünür. Geçersizleşen token'lar silinir.
+    /// </summary>
+    private async Task SendPushAsync(PushNotificationPayload payload, CancellationToken ct)
+    {
+        if (!pushSender.IsConfigured) return;
+        var n = await notifications.QueryAsNoTracking().Where(x => x.Id == payload.NotificationId)
+            .Select(x => new { x.UserId, x.Type, x.Title, x.Body, x.JobId, x.ReadAt, Active = x.User!.IsActive })
+            .FirstOrDefaultAsync(ct);
+        // Silinmiş, okunmuş veya pasif kullanıcıya ait bildirim telefona gönderilmez.
+        if (n is null || n.ReadAt is not null || !n.Active) return;
+        var tokens = await pushDevices.QueryAsNoTracking().Where(d => d.UserId == n.UserId).Select(d => d.Token).ToListAsync(ct);
+        if (tokens.Count == 0) return;
+
+        var unread = await notifications.QueryAsNoTracking().CountAsync(x => x.UserId == n.UserId && x.ReadAt == null, ct);
+        var data = new Dictionary<string, string>
+        {
+            ["notificationId"] = payload.NotificationId.ToString(),
+            ["type"] = n.Type.ToString(),
+        };
+        if (n.JobId is { } jobId) data["jobId"] = jobId.ToString();
+
+        var result = await pushSender.SendAsync(tokens.Select(t => new PushMessage(t, n.Title, n.Body, data, unread)).ToList(), ct);
+        if (result.InvalidTokens.Count > 0)
+        {
+            var invalid = result.InvalidTokens.ToList();
+            await pushDevices.Query().Where(d => invalid.Contains(d.Token)).ExecuteDeleteAsync(ct);
+            logger.LogInformation("{Count} geçersiz push token silindi.", invalid.Count);
+        }
     }
 
     private async Task HandleFailureAsync(OutboxMessage message, Exception ex, CancellationToken ct)

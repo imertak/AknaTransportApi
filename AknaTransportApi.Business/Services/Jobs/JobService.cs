@@ -12,6 +12,7 @@ public sealed class JobService(
     IVehicleTypeService vehicleTypes,
     INumberGenerator numberGenerator,
     IUnitOfWork unitOfWork,
+    JobNotificationPublisher notifier,
     ICurrentUser currentUser,
     TimeProvider clock,
     ILogger<JobService> logger) : IJobService
@@ -86,6 +87,7 @@ public sealed class JobService(
             job.JobNumber = await numberGenerator.NextJobNumberAsync(request.JobDate, token);
             job.Initialize(currentUser.UserId, driverId, now, driverId is null ? null : request.AssignedVehicleId);
             jobs.Add(job);
+            await notifier.OnJobChangedAsync(job, null, null, currentUser.UserId, token);
             await unitOfWork.SaveChangesAsync(token);
             return job.Id;
         }, ct);
@@ -108,6 +110,7 @@ public sealed class JobService(
         // Eski istemciler kişi listesini göndermez; o durumda mevcut kişiler korunur.
         if (request.Contacts is not null) job.SetContacts(request.ResolveContacts(), Now);
         job.ConcurrencyStamp = Guid.NewGuid();
+        notifier.OnJobUpdated(job, currentUser.UserId);
         await unitOfWork.SaveChangesAsync(ct);
         return await GetAsync(id, ct);
     }
@@ -117,6 +120,7 @@ public sealed class JobService(
         EnsureAdmin();
         var job = await LoadForUpdateAsync(id, ct);
         job.EnsureDeletable();
+        notifier.OnJobDeleted(job, currentUser.UserId);
         jobs.Remove(job);
         await unitOfWork.SaveChangesAsync(ct);
         logger.LogInformation("İş silindi. JobId: {JobId}", id);
@@ -210,7 +214,10 @@ public sealed class JobService(
     {
         var job = await LoadForUpdateAsync(id, ct);
         if (requireOwnership) EnsureCanOperate(job);
+        var previousDriverId = job.AssignedDriverId;
+        var previousStatus = job.Status;
         action(job);
+        await notifier.OnJobChangedAsync(job, previousDriverId, previousStatus, currentUser.UserId, ct);
         await unitOfWork.SaveChangesAsync(ct);
         logger.LogInformation("İş durumu güncellendi. JobId: {JobId}, Status: {Status}, ActorId: {ActorId}", job.Id, job.Status, currentUser.UserId);
         return await GetAsync(id, ct);

@@ -14,6 +14,8 @@ public sealed class BackgroundJobOptions
     public bool Enabled { get; set; } = true;
     public int EArchiveSyncIntervalMinutes { get; set; } = 5;
     public int RetentionIntervalHours { get; set; } = 24;
+    /// <summary>Bildirimlerin saklanma süresi (gün).</summary>
+    public int NotificationRetentionDays { get; set; } = 90;
 }
 
 /// <summary>Periyodik arka plan işlerinin ortak iskeleti: her turda yeni DI scope açar, hataları loglar.</summary>
@@ -52,7 +54,7 @@ public abstract class PeriodicWorker(IServiceScopeFactory scopeFactory, IOptions
     }
 }
 
-/// <summary>Outbox mesajlarını (fatura e-postası, şifre e-postası, SMS) işler.</summary>
+/// <summary>Outbox mesajlarını (fatura e-postası, şifre e-postası, SMS, push bildirimi) işler.</summary>
 public sealed class OutboxWorker(IServiceScopeFactory scopeFactory, IOptions<BackgroundJobOptions> options, IOptions<OutboxOptions> outboxOptions, ILogger<OutboxWorker> logger)
     : PeriodicWorker(scopeFactory, options, logger)
 {
@@ -94,8 +96,10 @@ public sealed class DataRetentionWorker(IServiceScopeFactory scopeFactory, IOpti
         var threshold = clock.GetUtcNow().UtcDateTime.AddDays(-7);
         var deletedTokens = await db.Set<RefreshToken>().Where(t => t.ExpiresAt < threshold).ExecuteDeleteAsync(ct);
         var deletedTracking = await db.Set<JobTrackingToken>().Where(t => t.ExpiresAt < threshold).ExecuteDeleteAsync(ct);
+        var notificationThreshold = clock.GetUtcNow().UtcDateTime.AddDays(-Math.Max(1, JobOptions.NotificationRetentionDays));
+        var deletedNotifications = await db.Set<Notification>().Where(n => n.CreatedAt < notificationThreshold).ExecuteDeleteAsync(ct);
 
-        logger.LogInformation("Veri temizliği: {Locations} konum, {Tokens} refresh token, {Tracking} takip bağlantısı silindi.",
-            deletedLocations, deletedTokens, deletedTracking);
+        logger.LogInformation("Veri temizliği: {Locations} konum, {Tokens} refresh token, {Tracking} takip bağlantısı, {Notifications} bildirim silindi.",
+            deletedLocations, deletedTokens, deletedTracking, deletedNotifications);
     }
 }

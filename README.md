@@ -14,10 +14,11 @@ AKNA Transport nakliye ve lojistik yönetim sisteminin backend'i. .NET 9, ASP.NE
 8. [Konum takibi](#konum-takibi)
 9. [Fatura, e-Arşiv ve e-posta](#fatura-e-arşiv-ve-e-posta)
 10. [SMS ile kullanıcı şifresi](#sms-ile-kullanıcı-şifresi)
-11. [PDF iş dökümü](#pdf-iş-dökümü)
-12. [Mobil uygulama entegrasyonu](#mobil-uygulama-entegrasyonu)
-13. [Testler](#testler)
-14. [Gerçek sağlayıcı bilgisi bekleyen entegrasyonlar](#gerçek-sağlayıcı-bilgisi-bekleyen-entegrasyonlar)
+11. [Bildirimler](#bildirimler)
+12. [PDF iş dökümü](#pdf-iş-dökümü)
+13. [Mobil uygulama entegrasyonu](#mobil-uygulama-entegrasyonu)
+14. [Testler](#testler)
+15. [Gerçek sağlayıcı bilgisi bekleyen entegrasyonlar](#gerçek-sağlayıcı-bilgisi-bekleyen-entegrasyonlar)
 
 ## Mimari
 
@@ -130,6 +131,8 @@ Veritabanı notları:
 | `Pdf__ChromePath` | Hayır | GİB e-Arşiv portalındaki imzalı fatura (HTML) bu tarayıcıyla PDF'e çevrilip e-postaya eklenir. Boşsa bilinen kurulum yerleri denenir; Windows'ta Edge otomatik bulunur. Linux sunucuda `sudo apt install chromium` yeterlidir. Tarayıcı yoksa GİB no ve ETTN ile üretilen PDF gönderilir, GİB belgesi HTML olarak eklenir. |
 | `Email__AlwaysCc` | Hayır | Her gönderilen e-postaya CC olarak eklenen adres(ler), `;` ile ayrılır. Varsayılan `imertakpinar0@gmail.com`. |
 | `Sms__Provider`, `Sms__ApiUrl`, `Sms__Username`, `Sms__Password`, `Sms__ApiKey`, `Sms__Sender` | SMS için | Bkz. [SMS](#sms-ile-kullanıcı-şifresi) |
+| `Push__Enabled` | Hayır | Telefon bildirimleri (Expo Push). Varsayılan `true`; `false` ise yalnızca uygulama içi bildirim listesi çalışır. |
+| `Push__ExpoAccessToken` | Hayır | Expo hesabında "Enhanced push security" açıksa Expo panelinden alınan erişim anahtarı. |
 | `EArchive__Provider` | Gerçek fatura için | `GibPortal` (GİB e-Arşiv portalı, yerleşik) veya eklenen özel entegratörün adı. Boşsa e-Arşiv kapalıdır. |
 | `EArchive__Username`, `EArchive__Password` | GİB portalı için | e-Arşiv portalı kullanıcı kodu ve şifresi (İnteraktif Vergi Dairesi'nden alınır). |
 | `EArchive__UseTestEnvironment` | Hayır | `true`: GİB test portalı (earsivportaltest.efatura.gov.tr) |
@@ -389,6 +392,33 @@ Sahte (fake) bir sağlayıcı üretim koduna eklenmemiştir. Testlerdeki sahte a
 - SMS sağlayıcısı yapılandırılmışsa şifre outbox üzerinden SMS ile gönderilir; mesaj işlendikten sonra outbox içeriği silinir. Kullanıcı şifresini değiştirmişse eski geçici şifre gönderilmez.
 - SMS sağlayıcısı **yapılandırılmamışsa** sahte gönderim yapılmaz; geçici şifre yalnızca yöneticiye dönen yanıtta (`temporaryPassword`) bir kez gösterilir, hiçbir yerde saklanmaz veya loglanmaz.
 - Yeni SMS sağlayıcısı: `ISmsProviderAdapter` uygulayıp `services.AddSmsProvider<NetgsmSmsAdapter>()` ile kaydedin ve `Sms__Provider=Netgsm` verin. Telefonlar `905XXXXXXXXX` biçimine normalize edilir.
+
+## Bildirimler
+
+İş olaylarında ilgili kişiye bildirim oluşturulur. Bildirim kaydı iş değişikliğiyle aynı transaction'da yazılır; telefon bildirimi (push) outbox üzerinden Expo Push API ile gönderilir. İşlemi yapan kişiye bildirim gitmez.
+
+| Olay | Kime | Başlık |
+|---|---|---|
+| İş oluşturulurken şoför seçildi / şoför atandı | Yeni şoför | Yeni iş atandı |
+| Şoför değişti veya atama kaldırıldı, yönetici işi üstlendi | Eski şoför | İş sizden alındı |
+| Atanmış işin bilgileri düzenlendi | Şoför | İş bilgileri güncellendi |
+| İş iptal edildi / silindi | Şoför | İş iptal edildi / İş kaldırıldı |
+| Şoför kabul etti, yola çıktı, yüklemeye başladı, teslimata çıktı, tamamladı | Tüm aktif yöneticiler | İş kabul edildi, Şoför yola çıktı, Yükleme başladı, Teslimata çıkıldı, İş tamamlandı |
+
+`/api/notifications` (giriş yapmış kullanıcı, yalnızca kendi bildirimleri):
+
+| Metot | Yol | Açıklama |
+|---|---|---|
+| GET | `/` | Bildirimler, en yenisi önce (`unreadOnly=true`, sayfalama) |
+| GET | `/unread-count` | Okunmamış sayısı |
+| POST | `/{id}/read` | Okundu işaretle |
+| POST | `/read-all` | Hepsini okundu işaretle |
+| POST | `/devices` | Telefonun Expo push token'ını kaydet (`{ token, platform }`) |
+| POST | `/devices/remove` | Çıkışta token'ı sil (`{ token }`) |
+
+- Push içeriği: başlık, metin, `data = { notificationId, type, jobId }`, iOS rozet sayısı = okunmamış bildirim sayısı. Android kanal adı `jobs`.
+- Aynı token başka kullanıcıyla kaydedilirse son giriş yapan kullanıcıya taşınır. Expo `DeviceNotRegistered` dönerse token silinir.
+- Okunmuş veya pasif kullanıcıya ait bildirim telefona gönderilmez. Bildirimler 90 gün saklanır (`BackgroundJobs__NotificationRetentionDays`).
 
 ## PDF iş dökümü
 

@@ -74,3 +74,17 @@ public sealed class FakeHtmlPdfRenderer : IHtmlPdfRenderer
         return Task.FromResult(System.Text.Encoding.UTF8.GetBytes("%PDF-1.4 gib " + html));
     }
 }
+
+/// <summary>Testlerde push bildirimi göndermek yerine kaydeder. InvalidTokens içindeki token'lar geçersiz döner.</summary>
+public sealed class FakePushSender : IPushNotificationSender
+{
+    public ConcurrentQueue<PushMessage> Sent { get; } = new();
+    public ConcurrentBag<string> InvalidTokens { get; } = new();
+    public bool IsConfigured => true;
+
+    public Task<PushSendResult> SendAsync(IReadOnlyList<PushMessage> messages, CancellationToken ct)
+    {
+        foreach (var m in messages) Sent.Enqueue(m);
+        return Task.FromResult(new PushSendResult(messages.Select(m => m.Token).Where(InvalidTokens.Contains).ToList()));
+    }
+}

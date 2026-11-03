@@ -877,5 +877,83 @@ BEGIN
     VALUES ('20261102184815_AddManualInvoiceEmails', '9.0.10');
     END IF;
 END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103062754_AddNotifications') THEN
+    CREATE TABLE notifications (
+        "Id" uuid NOT NULL,
+        "UserId" uuid NOT NULL,
+        "Type" character varying(30) NOT NULL,
+        "Title" character varying(150) NOT NULL,
+        "Body" character varying(500) NOT NULL,
+        "JobId" uuid,
+        "ReadAt" timestamp with time zone,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        CONSTRAINT "PK_notifications" PRIMARY KEY ("Id"),
+        CONSTRAINT "FK_notifications_transport_jobs_JobId" FOREIGN KEY ("JobId") REFERENCES transport_jobs ("Id") ON DELETE SET NULL,
+        CONSTRAINT "FK_notifications_users_UserId" FOREIGN KEY ("UserId") REFERENCES users ("Id") ON DELETE CASCADE
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103062754_AddNotifications') THEN
+    CREATE TABLE push_devices (
+        "Id" uuid NOT NULL,
+        "UserId" uuid NOT NULL,
+        "Token" character varying(200) NOT NULL,
+        "Platform" character varying(20),
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "LastSeenAt" timestamp with time zone NOT NULL,
+        CONSTRAINT "PK_push_devices" PRIMARY KEY ("Id"),
+        CONSTRAINT "FK_push_devices_users_UserId" FOREIGN KEY ("UserId") REFERENCES users ("Id") ON DELETE CASCADE
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103062754_AddNotifications') THEN
+    CREATE INDEX "IX_notifications_JobId" ON notifications ("JobId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103062754_AddNotifications') THEN
+    CREATE INDEX "IX_notifications_UserId_CreatedAt" ON notifications ("UserId", "CreatedAt");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103062754_AddNotifications') THEN
+    CREATE INDEX "IX_notifications_UserId_ReadAt" ON notifications ("UserId", "ReadAt");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103062754_AddNotifications') THEN
+    CREATE UNIQUE INDEX "IX_push_devices_Token" ON push_devices ("Token");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103062754_AddNotifications') THEN
+    CREATE INDEX "IX_push_devices_UserId" ON push_devices ("UserId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103062754_AddNotifications') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261103062754_AddNotifications', '9.0.10');
+    END IF;
+END $EF$;
 COMMIT;
 

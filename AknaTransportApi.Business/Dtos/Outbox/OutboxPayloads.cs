@@ -7,6 +7,7 @@ public static class OutboxMessageTypes
     public const string InvoiceEmail = "invoice.email";
     public const string PasswordResetEmail = "auth.password-reset-email";
     public const string UserCredentialsSms = "user.credentials-sms";
+    public const string PushNotification = "notification.push";
 }
 
 public sealed record InvoiceEmailPayload(Guid InvoiceId, Guid EmailLogId);
@@ -15,3 +16,6 @@ public sealed record PasswordResetEmailPayload(Guid UserId, Guid EmailLogId, str
 
 /// <summary>Geçici şifre içerir; mesaj işlendikten sonra içerik silinir.</summary>
 public sealed record UserCredentialsSmsPayload(Guid UserId, string PhoneNumber, string FullName, string Email, string TemporaryPassword, bool IsReset);
+
+/// <summary>Bildirim kaydının telefona (push) gönderimi.</summary>
+public sealed record PushNotificationPayload(Guid NotificationId);
