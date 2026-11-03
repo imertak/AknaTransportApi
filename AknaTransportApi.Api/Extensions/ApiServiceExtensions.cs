@@ -7,6 +7,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
@@ -49,6 +50,17 @@ public static class ApiServiceExtensions
             });
 
         services.AddJwtAuthentication();
+
+        // Canlı araç takibi (SignalR). Token süresi dolunca bağlantı kapanır; istemci yenilenmiş token ile yeniden bağlanır.
+        services.AddSignalR(o =>
+            {
+                o.EnableDetailedErrors = environment.IsDevelopment();
+                o.KeepAliveInterval = TimeSpan.FromSeconds(15);
+                o.ClientTimeoutInterval = TimeSpan.FromSeconds(40);
+                o.MaximumReceiveMessageSize = 16 * 1024;
+            })
+            .AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+        services.Replace(ServiceDescriptor.Singleton<ILocationBroadcaster, SignalRLocationBroadcaster>());
         services.AddRateLimiting();
         services.AddSwagger();
 
@@ -88,6 +100,15 @@ public static class ApiServiceExtensions
                 };
                 o.Events = new JwtBearerEvents
                 {
+                    // WebSocket/SSE tarayıcı ve RN istemcilerinde Authorization başlığı gönderilemez; SignalR token'ı
+                    // yalnızca hub yolunda access_token sorgu parametresiyle kabul edilir (istek loglarında sorgu yazılmaz).
+                    OnMessageReceived = context =>
+                    {
+                        var accessToken = context.Request.Query["access_token"];
+                        if (!string.IsNullOrEmpty(accessToken) && context.HttpContext.Request.Path.StartsWithSegments(TrackingHub.Path))
+                            context.Token = accessToken;
+                        return Task.CompletedTask;
+                    },
                     OnChallenge = async context =>
                     {
                         context.HandleResponse();

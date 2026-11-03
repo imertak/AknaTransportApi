@@ -1,4 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AknaTransportApi.Infrastructure.Persistence;
 
@@ -53,10 +56,58 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider c
         configurationBuilder.Properties<decimal>().HavePrecision(18, 2);
     }
 
-    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         ApplyTimestamps();
-        return base.SaveChangesAsync(cancellationToken);
+        var jobChanges = CollectJobChanges();
+        var result = await base.SaveChangesAsync(cancellationToken);
+        if (jobChanges.Count > 0) await PublishJobChangesAsync(jobChanges);
+        return result;
+    }
+
+    /// <summary>Canlı haritayı ilgilendiren iş alanları. Soft delete alanları varsa onlar da izlenir.</summary>
+    private static readonly HashSet<string> RealtimeJobProperties =
+        [nameof(TransportJob.Status), nameof(TransportJob.AssignedDriverId), nameof(TransportJob.AssignedVehicleId), "IsDeleted", "DeletedAt"];
+
+    /// <summary>
+    /// Kaydedilmeden önce durum/şoför/araç değişen veya silinen işleri toplar. Yayın, kayıt başarılı olduktan
+    /// sonra yapılır; böylece iş servislerine dokunmadan tüm iş akışları (iptal, silme, atama) kapsanır.
+    /// </summary>
+    private List<JobChangedDto> CollectJobChanges()
+    {
+        var list = new List<JobChangedDto>();
+        foreach (var entry in ChangeTracker.Entries<TransportJob>())
+        {
+            if (entry.State is not (EntityState.Added or EntityState.Modified or EntityState.Deleted)) continue;
+            if (entry.State == EntityState.Modified && !entry.Properties.Any(p => p.IsModified && RealtimeJobProperties.Contains(p.Metadata.Name))) continue;
+
+            var driverProperty = entry.Property(j => j.AssignedDriverId);
+            var drivers = new[] { driverProperty.CurrentValue, entry.State == EntityState.Added ? null : driverProperty.OriginalValue }
+                .Where(id => id is not null).Select(id => id!.Value).Distinct().ToList();
+            var removed = entry.State == EntityState.Deleted || IsSoftDeleted(entry);
+            list.Add(new JobChangedDto(entry.Entity.Id, entry.Entity.Status, drivers, removed));
+        }
+        return list;
+    }
+
+    private static bool IsSoftDeleted(EntityEntry<TransportJob> entry) =>
+        entry.Metadata.FindProperty("IsDeleted") is not null && entry.Property("IsDeleted").CurrentValue is true;
+
+    private async Task PublishJobChangesAsync(List<JobChangedDto> changes)
+    {
+        var services = this.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()?.ApplicationServiceProvider;
+        if (services?.GetService<ILocationBroadcaster>() is not { } broadcaster) return;
+        foreach (var change in changes)
+        {
+            try
+            {
+                await broadcaster.PublishJobChangedAsync(change, CancellationToken.None);
+            }
+            catch
+            {
+                // Gerçek zamanlı ipucu en iyi çaba ile gönderilir; kayıt zaten tamamlandı.
+            }
+        }
     }
 
     public override int SaveChanges()
