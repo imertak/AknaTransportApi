@@ -89,4 +89,4 @@ public sealed record ActiveJobLocationDto(
 public sealed record TrackingTokenDto(string Token, string? Url, DateTime ExpiresAt);
 
 /// <summary>Müşteri takip bağlantısı yanıtı: fiyat ve iç bilgiler içermez.</summary>
-public sealed record PublicTrackingDto(string JobNumber, JobStatus Status, string StoreName, DateOnly JobDate, string DeliveryAddress, LocationDto? Location);
+public sealed record PublicTrackingDto(string JobNumber, JobStatus Status, string StoreName, DateOnly JobDate, string DeliveryAddress, LocationDto? Location, string? VehiclePlate = null);

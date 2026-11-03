@@ -1,6 +1,6 @@
 // AKNA Transport müşteri canlı takip sayfası.
-// Bağlantı biçimi: https://<api-adresi>/takip/#<token>. Token adres çubuğunun # kısmında olduğu için
-// sunucu loglarına yazılmaz. Sayfa /api/tracking/<token> uç noktasını 15 saniyede bir sorgular.
+// Bağlantı biçimi: https://<api-adresi>/takip/?t=<token> (eski bağlantılar için #<token> da desteklenir).
+// Sunucu istek loglarına sorgu dizesi yazılmaz. Sayfa /api/tracking/<token> uç noktasını 15 saniyede bir sorgular.
 (function () {
   'use strict';
 
@@ -17,7 +17,7 @@
   };
   var LIVE = ['Accepted', 'OnTheWay', 'Loading', 'Delivering'];
 
-  var token = decodeURIComponent((location.hash || '').replace(/^#/, '')) || new URLSearchParams(location.search).get('t') || '';
+  var token = new URLSearchParams(location.search).get('t') || decodeURIComponent((location.hash || '').replace(/^#/, '')) || '';
   var el = function (id) { return document.getElementById(id); };
   var map = null;
   var marker = null;
@@ -79,6 +79,8 @@
     el('title').textContent = (store ? store + ' · ' : '') + data.jobNumber;
     el('date').textContent = formatDate(data.jobDate);
     el('address').textContent = data.deliveryAddress || '-';
+    el('plate').textContent = data.vehiclePlate || '';
+    el('plate').hidden = el('plate-label').hidden = !data.vehiclePlate;
     el('details').hidden = false;
 
     var loc = data.location;

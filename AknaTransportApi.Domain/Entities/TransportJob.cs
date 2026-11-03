@@ -246,11 +246,13 @@ public class TransportJob : Entity, IHasTimestamps
         if (InvoiceId is not null) throw new DomainException("Faturaya eklenmiş iş düzenlenemez. Önce faturayı iptal edin.");
     }
 
+    /// <summary>
+    /// İş her durumda (devam eden veya tamamlanmış dahil) kalıcı olarak silinebilir; yalnızca faturaya bağlı iş silinemez.
+    /// Faturada geçmiş iş (iptal edilmiş fatura dahil) fatura kaydı bozulmasın diye ayrıca serviste kontrol edilir.
+    /// </summary>
     public void EnsureDeletable()
     {
-        if (InvoiceId is not null) throw new DomainException("Faturaya eklenmiş iş silinemez.");
-        if (Status is not (JobStatus.Pending or JobStatus.Assigned or JobStatus.Cancelled))
-            throw new DomainException("Yalnızca başlamamış veya iptal edilmiş işler silinebilir. Devam eden işleri iptal edin.");
+        if (InvoiceId is not null) throw new DomainException("Faturaya eklenmiş iş silinemez. Önce işi faturadan çıkarın veya faturayı iptal edin.");
     }
 
     private void Transition(JobStatus expected, JobStatus next, Guid actorId, DateTime now, string note, string action)

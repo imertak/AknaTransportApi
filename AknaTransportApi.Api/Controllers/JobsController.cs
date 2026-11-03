@@ -43,7 +43,7 @@ public sealed class JobsController(IJobService jobService, ILocationService loca
     public async Task<ActionResult<BaseResponse<JobDetailDto>>> Update(Guid id, UpdateJobRequest request, CancellationToken ct) =>
         Success(await jobService.UpdateAsync(id, request, ct), "İş güncellendi.");
 
-    /// <summary>Yalnızca başlamamış (Pending/Assigned) veya iptal edilmiş, faturalanmamış işler silinebilir.</summary>
+    /// <summary>İşi durum geçmişi, durakları ve konum kayıtlarıyla birlikte kalıcı olarak siler. Faturada kullanılmış iş silinemez.</summary>
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = Policies.AdminOnly)]
     public async Task<ActionResult<BaseResponse>> Delete(Guid id, CancellationToken ct)
@@ -96,7 +96,7 @@ public sealed class JobsController(IJobService jobService, ILocationService loca
 
     /// <summary>
     /// Müşteriye verilecek salt okunur canlı takip bağlantısı oluşturur. App:TrackingUrl tanımlı değilse
-    /// bağlantı API'nin kendi takip sayfasını gösterir: https://&lt;api&gt;/takip/#&lt;token&gt;.
+    /// bağlantı API'nin kendi takip sayfasını gösterir: https://&lt;api&gt;/takip/?t=&lt;token&gt;.
     /// </summary>
     [HttpPost("{id:guid}/tracking-links")]
     [Authorize(Policy = Policies.AdminOnly)]
@@ -104,7 +104,7 @@ public sealed class JobsController(IJobService jobService, ILocationService loca
     {
         var link = await locationService.CreateTrackingTokenAsync(id, ct);
         if (string.IsNullOrWhiteSpace(link.Url))
-            link = link with { Url = $"{Request.Scheme}://{Request.Host}{Request.PathBase}/takip/#{Uri.EscapeDataString(link.Token)}" };
+            link = link with { Url = $"{Request.Scheme}://{Request.Host}{Request.PathBase}/takip/?t={Uri.EscapeDataString(link.Token)}" };
         return Success(link, "Takip bağlantısı oluşturuldu.");
     }
 

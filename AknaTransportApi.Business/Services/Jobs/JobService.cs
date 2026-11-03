@@ -8,6 +8,7 @@ public sealed class JobService(
     IRepository<JobStatusHistory> history,
     IRepository<User> users,
     IRepository<DriverVehicle> driverVehicles,
+    IRepository<InvoiceItem> invoiceItems,
     ICustomerService customerService,
     IVehicleTypeService vehicleTypes,
     INumberGenerator numberGenerator,
@@ -120,6 +121,9 @@ public sealed class JobService(
         EnsureAdmin();
         var job = await LoadForUpdateAsync(id, ct);
         job.EnsureDeletable();
+        // Fatura kalemleri işe bağlıdır; iptal edilmiş faturada geçse bile fatura kaydı korunur.
+        if (await invoiceItems.QueryAsNoTracking().AnyAsync(i => i.JobId == id, ct))
+            throw new BusinessValidationException("Bu iş daha önce bir faturada kullanıldığı için silinemez. Fatura kayıtları korunur.");
         notifier.OnJobDeleted(job, currentUser.UserId);
         jobs.Remove(job);
         await unitOfWork.SaveChangesAsync(ct);

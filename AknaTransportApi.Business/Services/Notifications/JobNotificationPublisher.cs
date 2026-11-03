@@ -69,7 +69,7 @@ public sealed class JobNotificationPublisher(
     /// <summary>Atanmış ve iptal edilmemiş iş silindiğinde şoföre haber verir (bildirim işe bağlanmaz).</summary>
     public void OnJobDeleted(TransportJob job, Guid actorId)
     {
-        if (job.Status == JobStatus.Cancelled) return;
+        if (job.Status is JobStatus.Cancelled or JobStatus.Completed) return;
         Add(job.AssignedDriverId, actorId, NotificationType.JobCancelled, "İş kaldırıldı", $"{Describe(job)} silindi.", job, linkToJob: false);
     }
 
