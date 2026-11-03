@@ -27,15 +27,23 @@
   function initMap() {
     if (map || typeof L === 'undefined') return;
     map = L.map('map', { zoomControl: true, attributionControl: true }).setView([41.015, 28.979], 10);
-    // OpenStreetMap'in kendi karo sunucusu, Referer göndermeyen sayfaları "Access blocked" ile engelliyor
-    // (API tüm yanıtlarda Referrer-Policy: no-referrer gönderir). Bu yüzden OSM verisini sunan CARTO
-    // karoları kullanılır; karo isteklerinde yalnızca sitenin kökü Referer olarak gider.
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd',
-      maxZoom: 20,
-      referrerPolicy: 'strict-origin-when-cross-origin',
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+    // OpenStreetMap'in kendi karo sunucusu Referer göndermeyen sayfaları engelliyor, CARTO ise tanımadığı
+    // adreslerden API anahtarı istiyor. Esri'nin anahtarsız sokak haritası her iki sorunu da yaşamaz.
+    // Esri bir gün yanıt vermezse OpenStreetMap'e (site kökü Referer olarak gönderilerek) geçilir.
+    var primary = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      attribution: 'Harita &copy; Esri, HERE, Garmin, &copy; OpenStreetMap katkıcıları'
     }).addTo(map);
+    var errors = 0;
+    primary.on('tileerror', function () {
+      if (++errors !== 5) return;
+      map.removeLayer(primary);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        referrerPolicy: 'strict-origin-when-cross-origin',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      }).addTo(map);
+    });
   }
 
   function formatDate(iso) {
