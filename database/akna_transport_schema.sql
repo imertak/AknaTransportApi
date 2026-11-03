@@ -955,5 +955,91 @@ BEGIN
     VALUES ('20261103062754_AddNotifications', '9.0.10');
     END IF;
 END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103163757_AddJobCancelAuditAndSoftDelete') THEN
+    ALTER TABLE transport_jobs ADD "CancelledByUserId" uuid;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103163757_AddJobCancelAuditAndSoftDelete') THEN
+    ALTER TABLE transport_jobs ADD "DeletedAt" timestamp with time zone;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103163757_AddJobCancelAuditAndSoftDelete') THEN
+    ALTER TABLE transport_jobs ADD "DeletedByUserId" uuid;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103163757_AddJobCancelAuditAndSoftDelete') THEN
+    ALTER TABLE transport_jobs ADD "DeletionReason" character varying(500);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103163757_AddJobCancelAuditAndSoftDelete') THEN
+    ALTER TABLE transport_jobs ADD "IsDeleted" boolean NOT NULL DEFAULT FALSE;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103163757_AddJobCancelAuditAndSoftDelete') THEN
+    CREATE INDEX "IX_transport_jobs_CancelledByUserId" ON transport_jobs ("CancelledByUserId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103163757_AddJobCancelAuditAndSoftDelete') THEN
+    CREATE INDEX "IX_transport_jobs_DeletedByUserId" ON transport_jobs ("DeletedByUserId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103163757_AddJobCancelAuditAndSoftDelete') THEN
+    ALTER TABLE transport_jobs ADD CONSTRAINT "FK_transport_jobs_users_CancelledByUserId" FOREIGN KEY ("CancelledByUserId") REFERENCES users ("Id") ON DELETE RESTRICT;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103163757_AddJobCancelAuditAndSoftDelete') THEN
+    ALTER TABLE transport_jobs ADD CONSTRAINT "FK_transport_jobs_users_DeletedByUserId" FOREIGN KEY ("DeletedByUserId") REFERENCES users ("Id") ON DELETE RESTRICT;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103163757_AddJobCancelAuditAndSoftDelete') THEN
+    UPDATE transport_jobs j
+    SET "CancelledByUserId" = h."ChangedByUserId"
+    FROM (
+        SELECT DISTINCT ON ("JobId") "JobId", "ChangedByUserId"
+        FROM job_status_histories
+        WHERE "ToStatus" = 'Cancelled'
+        ORDER BY "JobId", "ChangedAt" DESC
+    ) h
+    WHERE j."Id" = h."JobId" AND j."Status" = 'Cancelled' AND j."CancelledByUserId" IS NULL;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103163757_AddJobCancelAuditAndSoftDelete') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261103163757_AddJobCancelAuditAndSoftDelete', '9.0.10');
+    END IF;
+END $EF$;
 COMMIT;
 

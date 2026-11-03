@@ -67,6 +67,20 @@ public class TransportJob : Entity, IHasTimestamps
     public DateTime? StartedAt { get; private set; }
     public DateTime? CompletedAt { get; private set; }
     public DateTime? CancelledAt { get; private set; }
+    /// <summary>İşi iptal eden kullanıcı.</summary>
+    public Guid? CancelledByUserId { get; private set; }
+    public User? CancelledByUser { get; set; }
+
+    /// <summary>
+    /// Mantıksal silme. Silinen iş standart listelerde ve sorgularda görünmez (global query filter);
+    /// durum geçmişi, duraklar, konum ve bildirim kayıtları korunur. İptal (<see cref="JobStatus.Cancelled"/>) ile karıştırılmaz:
+    /// silinen işin durumu değişmez.
+    /// </summary>
+    public bool IsDeleted { get; private set; }
+    public DateTime? DeletedAt { get; private set; }
+    public Guid? DeletedByUserId { get; private set; }
+    public User? DeletedByUser { get; set; }
+    public string? DeletionReason { get; private set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 
@@ -149,15 +163,59 @@ public class TransportJob : Entity, IHasTimestamps
         CompletedAt = now;
     }
 
-    public void Cancel(Guid actorId, DateTime now, string? reason)
+    /// <summary>
+    /// İşi iptal eder. Tamamlanmamış her aşamada (bekliyor, atandı, kabul edildi, yolda, yüklemede, teslimatta) yapılabilir.
+    /// Zaten iptal edilmiş iş için hiçbir şey yapmaz ve false döner (tekrarlanan istek veri değiştirmez).
+    /// Tamamlanmış veya faturaya eklenmiş iş iptal edilemez; finansal kayıt bozulmaz.
+    /// Atanan şoför ve araç bilgisi geçmiş için korunur; iptal edilen iş konum kabul etmez.
+    /// </summary>
+    public bool Cancel(Guid actorId, DateTime now, string? reason)
     {
-        if (IsClosed) throw new InvalidJobStatusTransitionException(Status, "iptal");
-        if (InvoiceId is not null) throw new DomainException("Faturaya eklenmiş iş iptal edilemez.");
+        if (Status == JobStatus.Cancelled) return false;
+        if (IsDeleted) throw new DomainException("Silinmiş iş iptal edilemez.");
+        if (Status == JobStatus.Completed) throw new InvalidJobStatusTransitionException(Status, "iptal");
+        if (InvoiceId is not null) throw new DomainException("Faturaya eklenmiş iş iptal edilemez. Önce işi faturadan çıkarın veya faturayı iptal edin.");
         var from = Status;
         Status = JobStatus.Cancelled;
         CancelledAt = now;
-        CancellationReason = reason;
-        Record(from, Status, actorId, now, string.IsNullOrWhiteSpace(reason) ? "İş iptal edildi." : $"İş iptal edildi: {reason}");
+        CancelledByUserId = actorId;
+        CancellationReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        Record(from, Status, actorId, now, CancellationReason is null ? "İş iptal edildi." : $"İş iptal edildi: {CancellationReason}");
+        return true;
+    }
+
+    /// <summary>Silmede neden zorunlu mu? Sahada yürüyen veya tamamlanmış işler kritik sayılır.</summary>
+    public bool RequiresDeletionReason => InProgressStatuses.Contains(Status) || Status == JobStatus.Completed;
+
+    /// <summary>
+    /// İşi mantıksal olarak siler. Her aşamada yapılabilir; yalnızca faturaya bağlı iş silinemez.
+    /// Zaten silinmiş iş için hiçbir şey yapmaz ve false döner.
+    /// </summary>
+    public bool SoftDelete(Guid actorId, DateTime now, string? reason)
+    {
+        if (IsDeleted) return false;
+        EnsureDeletable();
+        var trimmed = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        if (trimmed is null && RequiresDeletionReason)
+            throw new DomainException("Devam eden veya tamamlanmış iş için silme nedeni girilmelidir.");
+        IsDeleted = true;
+        DeletedAt = now;
+        DeletedByUserId = actorId;
+        DeletionReason = trimmed;
+        ConcurrencyStamp = Guid.NewGuid();
+        return true;
+    }
+
+    /// <summary>Silinmiş işi geri alır; durum ve geçmiş olduğu gibi kalır.</summary>
+    public bool Restore()
+    {
+        if (!IsDeleted) return false;
+        IsDeleted = false;
+        DeletedAt = null;
+        DeletedByUserId = null;
+        DeletionReason = null;
+        ConcurrencyStamp = Guid.NewGuid();
+        return true;
     }
 
     /// <summary>
@@ -242,12 +300,13 @@ public class TransportJob : Entity, IHasTimestamps
     /// <summary>İş detayları (adres, fiyat vb.) değiştirilebilir mi?</summary>
     public void EnsureEditable()
     {
+        if (IsDeleted) throw new DomainException("Silinmiş iş düzenlenemez.");
         if (Status == JobStatus.Cancelled) throw new DomainException("İptal edilmiş iş düzenlenemez.");
         if (InvoiceId is not null) throw new DomainException("Faturaya eklenmiş iş düzenlenemez. Önce faturayı iptal edin.");
     }
 
     /// <summary>
-    /// İş her durumda (devam eden veya tamamlanmış dahil) kalıcı olarak silinebilir; yalnızca faturaya bağlı iş silinemez.
+    /// İş her durumda (devam eden veya tamamlanmış dahil) silinebilir; yalnızca faturaya bağlı iş silinemez.
     /// Faturada geçmiş iş (iptal edilmiş fatura dahil) fatura kaydı bozulmasın diye ayrıca serviste kontrol edilir.
     /// </summary>
     public void EnsureDeletable()

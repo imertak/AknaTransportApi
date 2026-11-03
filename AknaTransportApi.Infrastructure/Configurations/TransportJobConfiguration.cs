@@ -21,9 +21,15 @@ public sealed class TransportJobConfiguration : IEntityTypeConfiguration<Transpo
         b.Property(x => x.Currency).HasMaxLength(3).IsRequired();
         b.Property(x => x.Notes).HasMaxLength(2000);
         b.Property(x => x.CancellationReason).HasMaxLength(500);
+        b.Property(x => x.DeletionReason).HasMaxLength(500);
+        b.Property(x => x.IsDeleted).HasDefaultValue(false);
         b.Property(x => x.ConcurrencyStamp).IsConcurrencyToken();
         b.Ignore(x => x.IsClosed);
         b.Ignore(x => x.IsTrackable);
+        b.Ignore(x => x.RequiresDeletionReason);
+
+        // Mantıksal olarak silinen işler tüm standart sorgulardan çıkar. Silinen işleri görmek için IgnoreQueryFilters kullanılır.
+        b.HasQueryFilter(x => !x.IsDeleted);
 
         b.HasIndex(x => x.JobNumber).IsUnique();
         b.HasIndex(x => x.JobDate);
@@ -36,6 +42,8 @@ public sealed class TransportJobConfiguration : IEntityTypeConfiguration<Transpo
         b.HasOne(x => x.Customer).WithMany(c => c.Jobs).HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.CreatedByUser).WithMany().HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.AssignedDriver).WithMany().HasForeignKey(x => x.AssignedDriverId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.CancelledByUser).WithMany().HasForeignKey(x => x.CancelledByUserId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.DeletedByUser).WithMany().HasForeignKey(x => x.DeletedByUserId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.Invoice).WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.SetNull);
         // Araç silinmez (pasife alınır); geçmiş işlerdeki araç bilgisi korunur.
         b.HasOne(x => x.AssignedVehicle).WithMany().HasForeignKey(x => x.AssignedVehicleId).OnDelete(DeleteBehavior.Restrict);

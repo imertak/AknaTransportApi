@@ -270,7 +270,7 @@ public class StopVehicleLocationTests(AknaApiFactory factory) : IClassFixture<Ak
         await _client.RunToCompletionAsync(done1.Job.Id, admin);
         await _client.RunToCompletionAsync(done2.Job.Id, admin);
         await _client.RunToCompletionAsync(nextMonth.Job.Id, admin);
-        await _client.OkAsync<JobDetailDto>(HttpMethod.Patch, $"/api/jobs/{cancelled.Job.Id}/cancel", new CancelJobRequest(), admin);
+        await _client.OkAsync<JobDetailDto>(HttpMethod.Patch, $"/api/jobs/{cancelled.Job.Id}/cancel", new CancelJobRequest { Reason = "Test" }, admin);
 
         var revenue = await _client.OkAsync<MonthRevenueSummaryDto>(HttpMethod.Get, "/api/dashboard/revenue?year=2031&month=3", token: admin);
         Assert.Equal(12000m, revenue.Revenue);

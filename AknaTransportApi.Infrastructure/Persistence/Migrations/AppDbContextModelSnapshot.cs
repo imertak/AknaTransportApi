@@ -677,6 +677,9 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("CancelledAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("CancelledByUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -698,6 +701,16 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DeletionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("DeliveryAddress")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -716,6 +729,11 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("InvoiceId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<DateOnly>("JobDate")
                         .HasColumnType("date");
@@ -776,7 +794,11 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("AssignedVehicleId");
 
+                    b.HasIndex("CancelledByUserId");
+
                     b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("DeletedByUserId");
 
                     b.HasIndex("InvoiceId");
 
@@ -1257,6 +1279,11 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
                         .HasForeignKey("AssignedVehicleId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("AknaTransportApi.Domain.Entities.User", "CancelledByUser")
+                        .WithMany()
+                        .HasForeignKey("CancelledByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("AknaTransportApi.Domain.Entities.User", "CreatedByUser")
                         .WithMany()
                         .HasForeignKey("CreatedByUserId")
@@ -1269,6 +1296,11 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("AknaTransportApi.Domain.Entities.User", "DeletedByUser")
+                        .WithMany()
+                        .HasForeignKey("DeletedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("AknaTransportApi.Domain.Entities.Invoice", "Invoice")
                         .WithMany()
                         .HasForeignKey("InvoiceId")
@@ -1278,9 +1310,13 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
 
                     b.Navigation("AssignedVehicle");
 
+                    b.Navigation("CancelledByUser");
+
                     b.Navigation("CreatedByUser");
 
                     b.Navigation("Customer");
+
+                    b.Navigation("DeletedByUser");
 
                     b.Navigation("Invoice");
                 });

@@ -23,6 +23,8 @@ public static class DependencyInjection
         services.AddScoped<IVehicleTypeService, VehicleTypeService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<JobNotificationPublisher>();
+        // İş iptal/silme sonrası canlı takibi durduran kancalar. Yeni bir uygulama (ör. SignalR yayını) AddScoped ile eklenebilir.
+        services.AddScoped<IJobTrackingStopHandler, RevokeTrackingLinksOnStop>();
         services.AddScoped<IOutboxProcessor, OutboxProcessor>();
 
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly, includeInternalTypes: false);

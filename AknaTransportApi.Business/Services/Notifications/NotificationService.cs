@@ -14,7 +14,8 @@ public sealed class NotificationService(
         var q = notifications.QueryAsNoTracking().Where(n => n.UserId == currentUser.UserId);
         if (query.UnreadOnly) q = q.Where(n => n.ReadAt == null);
         return await q.OrderByDescending(n => n.CreatedAt).ThenByDescending(n => n.Id)
-            .Select(n => new NotificationDto(n.Id, n.Type, n.Title, n.Body, n.JobId, n.ReadAt != null, n.CreatedAt, n.ReadAt))
+            // Silinmiş (mantıksal) işe ait bildirim kalır ama işe bağlantı verilmez: Job navigasyonu global filtreyle null döner.
+            .Select(n => new NotificationDto(n.Id, n.Type, n.Title, n.Body, n.Job != null ? n.JobId : null, n.ReadAt != null, n.CreatedAt, n.ReadAt))
             .ToPagedResultAsync(query, ct);
     }
 

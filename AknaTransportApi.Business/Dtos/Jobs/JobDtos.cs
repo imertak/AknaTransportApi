@@ -40,7 +40,16 @@ public sealed record JobDto(
     // Fatura durumundan türetilir: NotInvoiced, InDraft, Invoiced.
     JobBillingStatus BillingStatus,
     // Yetkili kişiler (yük sahibi, teslim alan vb.).
-    IReadOnlyList<JobContactDto> Contacts);
+    IReadOnlyList<JobContactDto> Contacts,
+    // İptal denetimi: iptal eden kullanıcı (iptal tarihi ve nedeni yukarıda).
+    Guid? CancelledByUserId = null,
+    string? CancelledByUserName = null,
+    // Mantıksal silme denetimi. Standart listelerde silinmiş iş dönmez; yalnızca yöneticinin silinmiş işler listesinde görünür.
+    bool IsDeleted = false,
+    DateTime? DeletedAt = null,
+    Guid? DeletedByUserId = null,
+    string? DeletedByUserName = null,
+    string? DeletionReason = null);
 
 /// <summary>İşin yetkili kişisi.</summary>
 public sealed record JobContactDto(Guid Id, int Sequence, string? Role, string? Name, string PhoneNumber);
@@ -173,7 +182,20 @@ public sealed class JobActionRequest
 
 public sealed class CancelJobRequest
 {
+    /// <summary>İptal nedeni (zorunlu).</summary>
     public string? Reason { get; set; }
+}
+
+public sealed class DeleteJobRequest
+{
+    /// <summary>Silme nedeni. Devam eden veya tamamlanmış işlerde zorunludur.</summary>
+    public string? Reason { get; set; }
+}
+
+/// <summary>Silinmiş işler listesi filtreleri.</summary>
+public sealed class DeletedJobQuery : PagedQuery
+{
+    public string? Search { get; set; }
 }
 
 public sealed class JobQuery : PagedQuery

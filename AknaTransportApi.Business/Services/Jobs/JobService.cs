@@ -14,6 +14,7 @@ public sealed class JobService(
     INumberGenerator numberGenerator,
     IUnitOfWork unitOfWork,
     JobNotificationPublisher notifier,
+    IEnumerable<IJobTrackingStopHandler> trackingStopHandlers,
     ICurrentUser currentUser,
     TimeProvider clock,
     ILogger<JobService> logger) : IJobService
@@ -37,9 +38,14 @@ public sealed class JobService(
         return await Sort(ApplyFilters(q, query), query).Select(JobMappings.Projection).ToPagedResultAsync(query, ct);
     }
 
-    public async Task<JobDetailDto> GetAsync(Guid id, CancellationToken ct)
+    public Task<JobDetailDto> GetAsync(Guid id, CancellationToken ct) => GetAsync(id, includeDeleted: false, ct);
+
+    public async Task<JobDetailDto> GetAsync(Guid id, bool includeDeleted, CancellationToken ct)
     {
-        var dto = await jobs.QueryAsNoTracking().Where(j => j.Id == id).Select(JobMappings.Projection).FirstOrDefaultAsync(ct)
+        var q = jobs.QueryAsNoTracking();
+        // Silinmiş işin detayı ve geçmişi yalnızca yöneticiye açıktır.
+        if (includeDeleted && currentUser.IsAdmin) q = q.IgnoreQueryFilters();
+        var dto = await q.Where(j => j.Id == id).Select(JobMappings.Projection).FirstOrDefaultAsync(ct)
                   ?? throw NotFoundException.For("İş");
         EnsureCanView(dto.AssignedDriverId);
         var items = await LoadHistoryAsync(id, ct);
@@ -116,18 +122,55 @@ public sealed class JobService(
         return await GetAsync(id, ct);
     }
 
-    public async Task DeleteAsync(Guid id, CancellationToken ct)
+    /// <summary>
+    /// İşi mantıksal olarak siler (soft delete). İş, durum geçmişi, duraklar, konum ve bildirim kayıtları korunur;
+    /// iş yalnızca standart listelerden ve sorgulardan çıkar. Zaten silinmiş iş için istek başarıyla sonuçlanır (idempotent).
+    /// </summary>
+    public async Task DeleteAsync(Guid id, DeleteJobRequest request, CancellationToken ct)
     {
         EnsureAdmin();
-        var job = await LoadForUpdateAsync(id, ct);
+        var job = await jobs.Query().IgnoreQueryFilters().FirstOrDefaultAsync(j => j.Id == id, ct) ?? throw NotFoundException.For("İş");
+        if (job.IsDeleted) return;
         job.EnsureDeletable();
         // Fatura kalemleri işe bağlıdır; iptal edilmiş faturada geçse bile fatura kaydı korunur.
         if (await invoiceItems.QueryAsNoTracking().AnyAsync(i => i.JobId == id, ct))
             throw new BusinessValidationException("Bu iş daha önce bir faturada kullanıldığı için silinemez. Fatura kayıtları korunur.");
-        notifier.OnJobDeleted(job, currentUser.UserId);
-        jobs.Remove(job);
-        await unitOfWork.SaveChangesAsync(ct);
-        logger.LogInformation("İş silindi. JobId: {JobId}", id);
+        if (job.RequiresDeletionReason && request.Reason.TrimOrNull() is null)
+            throw new BusinessValidationException("Devam eden veya tamamlanmış işi silmek için silme nedeni girilmelidir.",
+                [new ErrorDetail("reason", "Silme nedenini yazın.")]);
+
+        var wasTrackable = job.IsTrackable;
+        job.SoftDelete(currentUser.UserId, Now, request.Reason.TrimOrNull());
+        await notifier.OnJobDeletedAsync(job, currentUser.UserId, ct);
+        if (!await TrySaveAsync(id, alreadyDone: j => j.IsDeleted, ct)) return;
+        logger.LogInformation("İş silindi (mantıksal). JobId: {JobId}, ActorId: {ActorId}, Status: {Status}", id, currentUser.UserId, job.Status);
+        await StopTrackingAsync(id, JobTrackingStopReason.Deleted, wasTrackable, ct);
+    }
+
+    public async Task<PagedResult<JobDto>> ListDeletedAsync(DeletedJobQuery query, CancellationToken ct)
+    {
+        EnsureAdmin();
+        var q = jobs.QueryAsNoTracking().IgnoreQueryFilters().Where(j => j.IsDeleted);
+        if (query.Search.TrimOrNull() is { } search)
+        {
+            var s = search.ToLower();
+            q = q.Where(j => j.JobNumber.ToLower().Contains(s) || j.StoreName.ToLower().Contains(s)
+                             || j.Customer!.CompanyName.ToLower().Contains(s) || j.RouteDescription.ToLower().Contains(s));
+        }
+        return await q.OrderByDescending(j => j.DeletedAt).ThenByDescending(j => j.Id).Select(JobMappings.Projection).ToPagedResultAsync(query, ct);
+    }
+
+    /// <summary>Silinmiş işi geri alır. İşin durumu ve geçmişi silinmeden önceki haliyle kalır.</summary>
+    public async Task<JobDetailDto> RestoreAsync(Guid id, CancellationToken ct)
+    {
+        EnsureAdmin();
+        var job = await jobs.Query().IgnoreQueryFilters().FirstOrDefaultAsync(j => j.Id == id, ct) ?? throw NotFoundException.For("İş");
+        if (job.Restore())
+        {
+            await TrySaveAsync(id, alreadyDone: j => !j.IsDeleted, ct);
+            logger.LogInformation("Silinen iş geri alındı. JobId: {JobId}, ActorId: {ActorId}", id, currentUser.UserId);
+        }
+        return await GetAsync(id, ct);
     }
 
     public async Task<JobDetailDto> AssignAsync(Guid id, AssignJobRequest request, CancellationToken ct)
@@ -161,10 +204,65 @@ public sealed class JobService(
     public Task<JobDetailDto> CompleteAsync(Guid id, JobActionRequest request, CancellationToken ct) =>
         MutateAsync(id, job => job.Complete(currentUser.UserId, Now, request.Note.TrimOrNull()), requireOwnership: true, ct);
 
-    public Task<JobDetailDto> CancelAsync(Guid id, CancelJobRequest request, CancellationToken ct)
+    /// <summary>
+    /// İşi iptal eder. Tamamlanmamış her aşamada yapılabilir; neden zorunludur. İptal tarihi, iptal eden kullanıcı ve
+    /// neden kaydedilir, durum geçmişine işlenir. Zaten iptal edilmiş iş için istek mevcut hali döndürür (idempotent).
+    /// Şoföre ve diğer yöneticilere bildirim gider; canlı takip ve müşteri takip bağlantıları durur.
+    /// </summary>
+    public async Task<JobDetailDto> CancelAsync(Guid id, CancelJobRequest request, CancellationToken ct)
     {
         EnsureAdmin();
-        return MutateAsync(id, job => job.Cancel(currentUser.UserId, Now, request.Reason.TrimOrNull()), requireOwnership: false, ct);
+        var reason = request.Reason.TrimOrNull()
+                     ?? throw new BusinessValidationException("İptal nedeni girilmelidir.", [new ErrorDetail("reason", "İptal nedenini yazın.")]);
+        var job = await LoadForUpdateAsync(id, ct);
+        var previousDriverId = job.AssignedDriverId;
+        var previousStatus = job.Status;
+        var wasTrackable = job.IsTrackable;
+        if (!job.Cancel(currentUser.UserId, Now, reason)) return await GetAsync(id, ct);
+
+        await notifier.OnJobChangedAsync(job, previousDriverId, previousStatus, currentUser.UserId, ct);
+        if (await TrySaveAsync(id, alreadyDone: j => j.Status == JobStatus.Cancelled, ct))
+        {
+            logger.LogInformation("İş iptal edildi. JobId: {JobId}, FromStatus: {FromStatus}, ActorId: {ActorId}", id, previousStatus, currentUser.UserId);
+            await StopTrackingAsync(id, JobTrackingStopReason.Cancelled, wasTrackable, ct);
+        }
+        return await GetAsync(id, ct);
+    }
+
+    /// <summary>
+    /// Kaydeder. Aynı iş aynı anda başka bir istekle değiştirildiyse (ör. iptal butonuna iki kez basıldı) ve
+    /// o istek aynı sonucu zaten üretmişse false döner; tekrarlanan istek hata vermez ve veri iki kez yazılmaz.
+    /// </summary>
+    private async Task<bool> TrySaveAsync(Guid id, Func<TransportJob, bool> alreadyDone, CancellationToken ct)
+    {
+        try
+        {
+            await unitOfWork.SaveChangesAsync(ct);
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            var current = await jobs.QueryAsNoTracking().IgnoreQueryFilters().FirstOrDefaultAsync(j => j.Id == id, ct);
+            if (current is not null && alreadyDone(current)) return false;
+            throw;
+        }
+    }
+
+    /// <summary>İptal/silme sonrası canlı takibi durduran kancaları çalıştırır. Kanca hatası işlemi geri almaz.</summary>
+    private async Task StopTrackingAsync(Guid jobId, JobTrackingStopReason reason, bool wasTrackable, CancellationToken ct)
+    {
+        foreach (var handler in trackingStopHandlers)
+        {
+            try
+            {
+                await handler.OnTrackingStoppedAsync(jobId, reason, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "Canlı takip durdurma kancası başarısız. JobId: {JobId}, Handler: {Handler}, WasTrackable: {WasTrackable}",
+                    jobId, handler.GetType().Name, wasTrackable);
+            }
+        }
     }
 
     public IQueryable<TransportJob> ApplyFilters(IQueryable<TransportJob> q, JobQuery query)

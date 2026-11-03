@@ -204,7 +204,10 @@ public class NotificationTests(AknaApiFactory factory) : IClassFixture<AknaApiFa
         var job = await _client.CreateJobAsync(admin, customer.Id, driverId: driver.Id);
         await _client.RunToCompletionAsync(job.Job.Id, driver.Token);
 
-        await _client.OkAsync<object>(HttpMethod.Delete, $"/api/jobs/{job.Job.Id}", token: admin);
+        // Tamamlanmış iş kritik sayılır: neden olmadan silinmez.
+        var (noReason, _) = await _client.SendAsync<object>(HttpMethod.Delete, $"/api/jobs/{job.Job.Id}", token: admin);
+        Assert.Equal(HttpStatusCode.BadRequest, noReason);
+        await _client.OkAsync<object>(HttpMethod.Delete, $"/api/jobs/{job.Job.Id}", new DeleteJobRequest { Reason = "Mükerrer kayıt" }, admin);
 
         var (status, _) = await _client.SendAsync<JobDetailDto>(HttpMethod.Get, $"/api/jobs/{job.Job.Id}", token: admin);
         Assert.Equal(HttpStatusCode.NotFound, status);
@@ -223,12 +226,12 @@ public class NotificationTests(AknaApiFactory factory) : IClassFixture<AknaApiFa
         await _client.RunToCompletionAsync(job.Job.Id, admin);
         var invoice = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest { JobIds = [job.Job.Id] }, admin);
 
-        var (status, _) = await _client.SendAsync<object>(HttpMethod.Delete, $"/api/jobs/{job.Job.Id}", token: admin);
+        var (status, _) = await _client.SendAsync<object>(HttpMethod.Delete, $"/api/jobs/{job.Job.Id}", new DeleteJobRequest { Reason = "Test" }, admin);
         Assert.NotEqual(HttpStatusCode.OK, status);
 
         // Fatura iptal edilse de kalem kaydı korunur; iş silinemez.
         await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{invoice.Id}/cancel", new { }, admin);
-        (status, _) = await _client.SendAsync<object>(HttpMethod.Delete, $"/api/jobs/{job.Job.Id}", token: admin);
+        (status, _) = await _client.SendAsync<object>(HttpMethod.Delete, $"/api/jobs/{job.Job.Id}", new DeleteJobRequest { Reason = "Test" }, admin);
         Assert.Equal(HttpStatusCode.BadRequest, status);
     }
 }

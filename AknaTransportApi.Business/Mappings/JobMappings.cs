@@ -20,7 +20,9 @@ public static class JobMappings
         j.AssignedVehicle != null ? j.AssignedVehicle.PlateNumber : null,
         j.InvoiceId == null ? JobBillingStatus.NotInvoiced
             : j.Invoice!.Status == InvoiceStatus.Issued ? JobBillingStatus.Invoiced : JobBillingStatus.InDraft,
-        j.Contacts.OrderBy(c => c.Sequence).Select(c => new JobContactDto(c.Id, c.Sequence, c.Role, c.Name, c.PhoneNumber)).ToList());
+        j.Contacts.OrderBy(c => c.Sequence).Select(c => new JobContactDto(c.Id, c.Sequence, c.Role, c.Name, c.PhoneNumber)).ToList(),
+        j.CancelledByUserId, j.CancelledByUser != null ? j.CancelledByUser.FullName : null,
+        j.IsDeleted, j.DeletedAt, j.DeletedByUserId, j.DeletedByUser != null ? j.DeletedByUser.FullName : null, j.DeletionReason);
 
     /// <summary>"Firma / Mağaza" (mağaza adı isteğe bağlı; boşsa yalnızca firma).</summary>
     public static string PartyLabel(string? companyName, string? storeName)
