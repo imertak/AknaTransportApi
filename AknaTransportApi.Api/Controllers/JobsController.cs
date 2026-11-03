@@ -94,11 +94,19 @@ public sealed class JobsController(IJobService jobService, ILocationService loca
     public async Task<ActionResult<BaseResponse<JobDetailDto>>> Cancel(Guid id, [FromBody] CancelJobRequest? request, CancellationToken ct) =>
         Success(await jobService.CancelAsync(id, request ?? new(), ct), "İş iptal edildi.");
 
-    /// <summary>Müşteriye verilecek salt okunur canlı takip bağlantısı oluşturur.</summary>
+    /// <summary>
+    /// Müşteriye verilecek salt okunur canlı takip bağlantısı oluşturur. App:TrackingUrl tanımlı değilse
+    /// bağlantı API'nin kendi takip sayfasını gösterir: https://&lt;api&gt;/takip/#&lt;token&gt;.
+    /// </summary>
     [HttpPost("{id:guid}/tracking-links")]
     [Authorize(Policy = Policies.AdminOnly)]
-    public async Task<ActionResult<BaseResponse<TrackingTokenDto>>> CreateTrackingLink(Guid id, CancellationToken ct) =>
-        Success(await locationService.CreateTrackingTokenAsync(id, ct), "Takip bağlantısı oluşturuldu.");
+    public async Task<ActionResult<BaseResponse<TrackingTokenDto>>> CreateTrackingLink(Guid id, CancellationToken ct)
+    {
+        var link = await locationService.CreateTrackingTokenAsync(id, ct);
+        if (string.IsNullOrWhiteSpace(link.Url))
+            link = link with { Url = $"{Request.Scheme}://{Request.Host}{Request.PathBase}/takip/#{Uri.EscapeDataString(link.Token)}" };
+        return Success(link, "Takip bağlantısı oluşturuldu.");
+    }
 
     /// <summary>İşin tüm takip bağlantılarını iptal eder.</summary>
     [HttpDelete("{id:guid}/tracking-links")]

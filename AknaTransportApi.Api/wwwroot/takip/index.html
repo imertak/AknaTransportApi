@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <title>AKNA Transport · Canlı Takip</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="takip.css">
+</head>
+<body>
+  <header class="bar">
+    <strong>AKNA Transport</strong>
+    <span>Canlı Takip</span>
+  </header>
+  <main>
+    <div id="map" class="map" aria-label="Araç konumu haritası"></div>
+    <section class="card" aria-live="polite">
+      <div class="row">
+        <span id="status" class="badge">Yükleniyor…</span>
+        <span id="updated" class="muted"></span>
+      </div>
+      <h1 id="title">Takip bilgisi alınıyor</h1>
+      <p id="message" class="muted"></p>
+      <dl id="details" hidden>
+        <dt>Tarih</dt><dd id="date"></dd>
+        <dt>Teslimat adresi</dt><dd id="address"></dd>
+      </dl>
+      <a id="open-maps" class="button" target="_blank" rel="noopener" hidden>Haritada aç</a>
+    </section>
+  </main>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="takip.js"></script>
+</body>
+</html>

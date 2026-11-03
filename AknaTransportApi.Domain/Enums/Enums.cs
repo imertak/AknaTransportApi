@@ -87,3 +87,26 @@ public enum JobBillingStatus
     /// <summary>e-Arşiv sağlayıcısından başarılı yanıtla kesilmiş faturada.</summary>
     Invoiced = 2,
 }
+
+/// <summary>Bildirim türleri. Uygulama türe göre ikon ve yönlendirme seçer.</summary>
+public enum NotificationType
+{
+    /// <summary>İş şoföre atandı (şoföre).</summary>
+    JobAssigned = 0,
+    /// <summary>İş şoförden alındı veya başka şoföre verildi (eski şoföre).</summary>
+    JobUnassigned = 1,
+    /// <summary>Atanmış işin bilgileri değişti (şoföre).</summary>
+    JobUpdated = 2,
+    /// <summary>İş iptal edildi (şoföre).</summary>
+    JobCancelled = 3,
+    /// <summary>Şoför işi kabul etti (yöneticilere).</summary>
+    JobAccepted = 4,
+    /// <summary>Şoför yola çıktı (yöneticilere).</summary>
+    JobStarted = 5,
+    /// <summary>Yükleme başladı (yöneticilere).</summary>
+    JobLoading = 6,
+    /// <summary>Teslimata çıkıldı (yöneticilere).</summary>
+    JobDelivering = 7,
+    /// <summary>İş tamamlandı (yöneticilere).</summary>
+    JobCompleted = 8,
+}
