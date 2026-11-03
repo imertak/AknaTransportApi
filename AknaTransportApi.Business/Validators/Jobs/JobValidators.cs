@@ -90,7 +90,15 @@ public sealed class UpdateJobRequestValidator : JobRequestBaseValidator<UpdateJo
 
 public sealed class CancelJobRequestValidator : AbstractValidator<CancelJobRequest>
 {
-    public CancelJobRequestValidator() => RuleFor(x => x.Reason).MaximumLength(500);
+    public CancelJobRequestValidator() =>
+        RuleFor(x => x.Reason)
+            .Must(r => !string.IsNullOrWhiteSpace(r)).WithMessage("İptal nedeni girilmelidir.")
+            .MaximumLength(500);
+}
+
+public sealed class DeleteJobRequestValidator : AbstractValidator<DeleteJobRequest>
+{
+    public DeleteJobRequestValidator() => RuleFor(x => x.Reason).MaximumLength(500);
 }
 
 public sealed class JobActionRequestValidator : AbstractValidator<JobActionRequest>

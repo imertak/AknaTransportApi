@@ -21,9 +21,16 @@ public sealed class JobsController(IJobService jobService, ILocationService loca
     public async Task<ActionResult<BaseResponse<PagedResult<JobDto>>>> MyJobs([FromQuery] JobQuery query, CancellationToken ct) =>
         Success(await jobService.ListMyJobsAsync(query, ct));
 
+    /// <summary>İş detayı. Yönetici includeDeleted=true ile silinmiş işin detayını ve geçmişini de görebilir.</summary>
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<BaseResponse<JobDetailDto>>> Get(Guid id, CancellationToken ct) =>
-        Success(await jobService.GetAsync(id, ct));
+    public async Task<ActionResult<BaseResponse<JobDetailDto>>> Get(Guid id, [FromQuery] bool includeDeleted, CancellationToken ct) =>
+        Success(await jobService.GetAsync(id, includeDeleted, ct));
+
+    /// <summary>Silinmiş (mantıksal) işler, en son silinen önce. Filtre: search.</summary>
+    [HttpGet("deleted")]
+    [Authorize(Policy = Policies.AdminOnly)]
+    public async Task<ActionResult<BaseResponse<PagedResult<JobDto>>>> Deleted([FromQuery] DeletedJobQuery query, CancellationToken ct) =>
+        Success(await jobService.ListDeletedAsync(query, ct));
 
     [HttpGet("{id:guid}/history")]
     public async Task<ActionResult<BaseResponse<IReadOnlyList<JobStatusHistoryDto>>>> History(Guid id, CancellationToken ct) =>
@@ -43,14 +50,24 @@ public sealed class JobsController(IJobService jobService, ILocationService loca
     public async Task<ActionResult<BaseResponse<JobDetailDto>>> Update(Guid id, UpdateJobRequest request, CancellationToken ct) =>
         Success(await jobService.UpdateAsync(id, request, ct), "İş güncellendi.");
 
-    /// <summary>İşi durum geçmişi, durakları ve konum kayıtlarıyla birlikte kalıcı olarak siler. Faturada kullanılmış iş silinemez.</summary>
+    /// <summary>
+    /// İşi mantıksal olarak siler (soft delete): iş standart listelerden çıkar, durum geçmişi, duraklar ve konum kayıtları korunur.
+    /// Silme tarihi, silen kullanıcı ve neden saklanır. Gövde isteğe bağlıdır: { "reason": "..." }; devam eden veya
+    /// tamamlanmış işte neden zorunludur. Faturada kullanılmış iş silinemez. Tekrarlanan istek başarıyla sonuçlanır.
+    /// </summary>
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = Policies.AdminOnly)]
-    public async Task<ActionResult<BaseResponse>> Delete(Guid id, CancellationToken ct)
+    public async Task<ActionResult<BaseResponse>> Delete(Guid id, [FromBody] DeleteJobRequest? request, CancellationToken ct)
     {
-        await jobService.DeleteAsync(id, ct);
+        await jobService.DeleteAsync(id, request ?? new(), ct);
         return Done("İş silindi.");
     }
+
+    /// <summary>Silinmiş işi geri alır.</summary>
+    [HttpPatch("{id:guid}/restore")]
+    [Authorize(Policy = Policies.AdminOnly)]
+    public async Task<ActionResult<BaseResponse<JobDetailDto>>> Restore(Guid id, CancellationToken ct) =>
+        Success(await jobService.RestoreAsync(id, ct), "İş geri alındı.");
 
     /// <summary>Şoför atar; driverId null ise atama kaldırılır. Yönetici kendi Id'sini de verebilir.</summary>
     [HttpPatch("{id:guid}/assign")]
@@ -89,6 +106,10 @@ public sealed class JobsController(IJobService jobService, ILocationService loca
     public async Task<ActionResult<BaseResponse<JobDetailDto>>> Complete(Guid id, [FromBody] JobActionRequest? request, CancellationToken ct) =>
         Success(await jobService.CompleteAsync(id, request ?? new(), ct), "İş tamamlandı.");
 
+    /// <summary>
+    /// Tamamlanmamış her aşamada iptal eder; gövde: { "reason": "..." } (zorunlu). Faturaya eklenmiş veya tamamlanmış iş iptal edilemez.
+    /// Zaten iptal edilmiş iş için mevcut hali döner.
+    /// </summary>
     [HttpPatch("{id:guid}/cancel")]
     [Authorize(Policy = Policies.AdminOnly)]
     public async Task<ActionResult<BaseResponse<JobDetailDto>>> Cancel(Guid id, [FromBody] CancelJobRequest? request, CancellationToken ct) =>

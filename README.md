@@ -222,15 +222,17 @@ Geçmiş iş veya faturası olan müşteri silinmez, pasife alınır (`isActive=
 |---|---|---|
 | GET | `/` | Oturum (şoför yalnızca kendi işleri) |
 | GET | `/my-jobs` | Oturum |
-| GET | `/{id}` | Admin veya atanmış şoför (durum geçmişiyle birlikte) |
+| GET | `/{id}` | Admin veya atanmış şoför (durum geçmişiyle birlikte). Admin `?includeDeleted=true` ile silinmiş işi de görür |
+| GET | `/deleted` | Admin (silinmiş işler, en son silinen önce; `search`) |
 | GET | `/{id}/history` | Admin veya atanmış şoför |
 | POST | `/` | Admin |
 | PUT | `/{id}` | Admin |
-| DELETE | `/{id}` | Admin (yalnızca başlamamış/iptal, faturalanmamış) |
+| DELETE | `/{id}` | Admin. Mantıksal silme (soft delete), her aşamada; gövde `{ "reason": "..." }` devam eden/tamamlanmış işte zorunlu. Faturada kullanılmış iş silinemez |
+| PATCH | `/{id}/restore` | Admin (silinmiş işi geri alır) |
 | PATCH | `/{id}/assign` | Admin (`driverId`, `vehicleId`; `driverId: null` atamayı kaldırır) |
 | PATCH | `/{id}/claim` | Admin (işi üstlenir → Accepted; isteğe bağlı kendi aracı `vehicleId`) |
 | PATCH | `/{id}/accept`, `/start`, `/start-loading`, `/start-delivery`, `/complete` | Admin veya atanmış şoför |
-| PATCH | `/{id}/cancel` | Admin |
+| PATCH | `/{id}/cancel` | Admin. Gövde `{ "reason": "..." }` zorunlu. Tamamlanmış/faturalı iş iptal edilemez; zaten iptal edilmiş işte mevcut hali döner |
 | POST / DELETE | `/{id}/tracking-links` | Admin (müşteri takip bağlantısı oluştur / iptal et) |
 
 Liste filtreleri: `startDate`, `endDate`, `customerId`, `driverId`, `status` (çoklu: `?status=Pending&status=Assigned`), `vehicleType`, `storeName`, `search`, `uninvoiced`, `billingStatus` (`NotInvoiced`, `InDraft`, `Invoiced`). Sıralama: `sortBy=jobDate|price|createdAt|jobNumber|status|storeName`.
@@ -309,6 +311,25 @@ Pending ──assign──▶ Assigned ──accept──▶ Accepted ──star
 - Geçişler `TransportJob` entity'sindeki metotlarla yapılır; atlama veya geri dönüş (ör. tamamlanmış işi yeniden yola çıkarma) 409 döner.
 - Şoför ataması yalnızca iş başlamadan (Pending/Assigned/Accepted) değiştirilebilir.
 - Faturalanmış iş düzenlenemez, silinemez, iptal edilemez.
+
+### İptal ve silme
+
+İptal ve silme ayrı işlemlerdir; silinen iş "iptal" sayılmaz.
+
+| | İptal (`PATCH /{id}/cancel`) | Silme (`DELETE /{id}`) |
+|---|---|---|
+| Ne olur | Durum `Cancelled` olur, iş listede kalır | `IsDeleted=true`; iş tüm standart sorgulardan çıkar (EF global query filter), durumu değişmez |
+| Hangi aşamada | Completed dışındaki her durum | Her durum (iptal edilmiş ve tamamlanmış dahil) |
+| Neden | Zorunlu | Devam eden (Accepted, OnTheWay, Loading, Delivering) ve tamamlanmış işte zorunlu |
+| Denetim | `CancelledAt`, `CancelledByUserId`, `CancellationReason`, durum geçmişi kaydı | `DeletedAt`, `DeletedByUserId`, `DeletionReason` |
+| Engel | Faturaya eklenmiş iş | Faturaya eklenmiş veya daha önce faturada kullanılmış iş |
+| Tekrarlanan istek | Mevcut hali döner, ikinci kayıt oluşmaz | Başarılı döner, alanlar değişmez |
+| Geri alma | Yok | `PATCH /{id}/restore` |
+
+- Her iki işlemde de şoför ile araç bilgisi geçmiş için korunur; iş artık konum kabul etmez (canlı takip durur). Kayıttan sonra `IJobTrackingStopHandler` kancaları çalışır; varsayılan kanca müşteri takip bağlantılarını kapatır.
+- Bildirim: iptalde şoföre ve diğer yöneticilere, silmede (iş kapanmamışsa) şoföre ve diğer yöneticilere. Silinen işe ait eski bildirimler kalır ama işe bağlantı vermez.
+- Silinen işin durak, durum geçmişi, konum ve bildirim kayıtları silinmez. Silinmiş işi olan müşteri silinmez, pasife alınır.
+- Eşzamanlı iki iptal/silme isteğinde biri kaydeder, diğeri aynı sonucu görüp başarılı döner.
 - Her geçiş `job_status_histories` tablosuna önceki durum, yeni durum, işlemi yapan kullanıcı, tarih ve açıklama ile yazılır.
 
 ## Konum takibi
@@ -403,7 +424,7 @@ Sahte (fake) bir sağlayıcı üretim koduna eklenmemiştir. Testlerdeki sahte a
 | İş oluşturulurken şoför seçildi / şoför atandı | Yeni şoför | Yeni iş atandı |
 | Şoför değişti veya atama kaldırıldı, yönetici işi üstlendi | Eski şoför | İş sizden alındı |
 | Atanmış işin bilgileri düzenlendi | Şoför | İş bilgileri güncellendi |
-| İş iptal edildi / silindi | Şoför | İş iptal edildi / İş kaldırıldı |
+| İş iptal edildi / silindi | Şoför ve diğer aktif yöneticiler | İş iptal edildi / İş kaldırıldı, İş silindi |
 | Şoför kabul etti, yola çıktı, yüklemeye başladı, teslimata çıktı, tamamladı | Tüm aktif yöneticiler | İş kabul edildi, Şoför yola çıktı, Yükleme başladı, Teslimata çıkıldı, İş tamamlandı |
 
 `/api/notifications` (giriş yapmış kullanıcı, yalnızca kendi bildirimleri):

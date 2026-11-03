@@ -171,7 +171,7 @@ public class JobTests(AknaApiFactory factory) : IClassFixture<AknaApiFactory>
             Assert.Equal(HttpStatusCode.Conflict, status);
             Assert.False(body!.IsSuccess);
         }
-        var (adminCancel, _) = await _client.SendAsync<JobDetailDto>(HttpMethod.Patch, $"/api/jobs/{job.Job.Id}/cancel", new { }, admin);
+        var (adminCancel, _) = await _client.SendAsync<JobDetailDto>(HttpMethod.Patch, $"/api/jobs/{job.Job.Id}/cancel", new CancelJobRequest { Reason = "Test" }, admin);
         Assert.Equal(HttpStatusCode.Conflict, adminCancel);
     }
 

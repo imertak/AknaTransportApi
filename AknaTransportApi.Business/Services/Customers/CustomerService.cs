@@ -63,7 +63,8 @@ public sealed class CustomerService(
     public async Task<CustomerDeleteResult> DeleteAsync(Guid id, CancellationToken ct)
     {
         var customer = await customers.GetByIdAsync(id, ct) ?? throw NotFoundException.For("Müşteri");
-        var hasHistory = await jobs.QueryAsNoTracking().AnyAsync(j => j.CustomerId == id, ct)
+        // Silinmiş (mantıksal) işler de geçmiş sayılır; müşteri kaydı bu işlere bağlı kalır.
+        var hasHistory = await jobs.QueryAsNoTracking().IgnoreQueryFilters().AnyAsync(j => j.CustomerId == id, ct)
                          || await invoices.QueryAsNoTracking().AnyAsync(i => i.CustomerId == id, ct);
 
         if (hasHistory)

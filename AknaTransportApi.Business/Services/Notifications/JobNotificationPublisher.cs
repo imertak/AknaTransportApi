@@ -27,6 +27,9 @@ public sealed class JobNotificationPublisher(
         {
             var reason = string.IsNullOrWhiteSpace(job.CancellationReason) ? "" : $" Sebep: {job.CancellationReason}";
             Add(previousDriverId, actorId, NotificationType.JobCancelled, "İş iptal edildi", $"{Describe(job)} iptal edildi.{reason}", job);
+            // Diğer yöneticiler de iptalden haberdar olur (iptal eden ve şoför olarak zaten bildirilen hariç).
+            foreach (var adminId in await OtherAdminsAsync(actorId, previousDriverId, ct))
+                Add(adminId, actorId, NotificationType.JobCancelled, "İş iptal edildi", $"{Describe(job)} iptal edildi.{reason}", job);
             return;
         }
 
@@ -66,12 +69,24 @@ public sealed class JobNotificationPublisher(
             $"{Describe(job)} işinin bilgileri değişti. {Route(job)}", job);
     }
 
-    /// <summary>Atanmış ve iptal edilmemiş iş silindiğinde şoföre haber verir (bildirim işe bağlanmaz).</summary>
-    public void OnJobDeleted(TransportJob job, Guid actorId)
+    /// <summary>
+    /// İş silindiğinde haber verir: iptal edilmemiş/tamamlanmamış işte şoföre, her durumda diğer yöneticilere.
+    /// Silinen iş standart sorgularda görünmediği için bildirim işe bağlanmaz.
+    /// </summary>
+    public async Task OnJobDeletedAsync(TransportJob job, Guid actorId, CancellationToken ct)
     {
-        if (job.Status is JobStatus.Cancelled or JobStatus.Completed) return;
-        Add(job.AssignedDriverId, actorId, NotificationType.JobCancelled, "İş kaldırıldı", $"{Describe(job)} silindi.", job, linkToJob: false);
+        var reason = string.IsNullOrWhiteSpace(job.DeletionReason) ? "" : $" Sebep: {job.DeletionReason}";
+        var driverNotified = job.Status is not (JobStatus.Cancelled or JobStatus.Completed);
+        if (driverNotified)
+            Add(job.AssignedDriverId, actorId, NotificationType.JobCancelled, "İş kaldırıldı", $"{Describe(job)} silindi.{reason}", job, linkToJob: false);
+        foreach (var adminId in await OtherAdminsAsync(actorId, driverNotified ? job.AssignedDriverId : null, ct))
+            Add(adminId, actorId, NotificationType.JobCancelled, "İş silindi", $"{Describe(job)} silindi.{reason}", job, linkToJob: false);
     }
+
+    private async Task<List<Guid>> OtherAdminsAsync(Guid actorId, Guid? exclude, CancellationToken ct) =>
+        await users.QueryAsNoTracking()
+            .Where(u => u.Role == UserRole.Admin && u.IsActive && u.Id != actorId && u.Id != exclude)
+            .Select(u => u.Id).ToListAsync(ct);
 
     private void Add(Guid? userId, Guid actorId, NotificationType type, string title, string body, TransportJob job, bool linkToJob = true)
     {
