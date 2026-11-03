@@ -140,7 +140,7 @@ Veritabanı notları:
 | `App__CompanyIban`, `App__CompanyBankName` | Önerilir | Faturanın açıklamasına yazılan IBAN ve banka adı (istekte IBAN verilmezse) |
 | `App__DefaultWithholdingCode` | Hayır | Varsayılan KDV tevkifat kodu (ör. `624`). Boşsa faturalar tevkifatsız açılır. |
 | `App__PasswordResetUrl` | Hayır | Şifre sıfırlama bağlantısı, `{token}` ve `{email}` yer tutucuları |
-| `App__TrackingUrl` | Hayır | Müşteri takip bağlantısı, `{token}` yer tutucusu |
+| `App__TrackingUrl` | Hayır | Müşteri takip bağlantısı, `{token}` yer tutucusu. Boşsa API'nin kendi takip sayfası kullanılır: `https://<api>/takip/#<token>` |
 | `App__TimeZoneId` | Hayır | Varsayılan `Europe/Istanbul` |
 | `Cors__AllowedOrigins__0..n` | Hayır | Web istemcileri için izinli origin'ler |
 | `Storage__RootPath` | Hayır | e-Arşiv PDF'lerinin saklandığı klasör (web kökü dışında) |
@@ -320,6 +320,7 @@ Pending ──assign──▶ Assigned ──accept──▶ Accepted ──star
 - Son konum ayrı `job_latest_locations` tablosunda (iş başına tek satır, PK = JobId) tutulur; harita sorguları büyük geçmiş tablosuna gitmez. Geçmiş için `(JobId, RecordedAt)` index'i ve sayfalama (en fazla 500) vardır.
 - Saklama: `LocationTracking__RetentionDays` (varsayılan 90) günden eski konumlar günlük arka plan işiyle silinir.
 - Gerçek zamanlı yayın için `ILocationBroadcaster` genişleme noktası vardır (varsayılan: yayın yapmaz). SignalR eklendiğinde yalnızca bu arayüzün bir hub uygulaması yazılır.
+- Müşteri canlı takip sayfası: `wwwroot/takip` (tek HTML + `takip.js`, Leaflet/OpenStreetMap haritası). Yönetici uygulamada iş detayındaki **Canlı konumu paylaş** butonuyla bağlantı üretip WhatsApp/SMS ile gönderir. Sayfa `/api/tracking/{token}` uç noktasını 15 saniyede bir sorgular; iş tamamlanınca veya iptal edilince durur. Token `#` kısmında taşındığı için sunucu loglarına yazılmaz.
 - Müşteri takibi: Customer rolü eklenmeden, işe özel süreli ve iptal edilebilir takip token'ı (`job_tracking_tokens`, yalnızca özet saklanır) ile çalışır.
 
 Mobil uygulamadaki `LOCATION_CONFIG` (40 m / 20 sn) ile uyumludur.

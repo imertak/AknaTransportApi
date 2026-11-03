@@ -166,4 +166,24 @@ public class NotificationTests(AknaApiFactory factory) : IClassFixture<AknaApiFa
         const string body = """{"data":[{"status":"ok","id":"1"},{"status":"error","message":"x","details":{"error":"DeviceNotRegistered"}}]}""";
         Assert.Equal(["ExponentPushToken[b]"], ExpoPushNotificationSender.ReadInvalidTokens(body, batch).ToList());
     }
+
+    [Fact]
+    public async Task Tracking_link_points_to_built_in_page_which_is_served()
+    {
+        var admin = await _client.AdminTokenAsync();
+        var driver = await _client.CreateDriverAsync(admin);
+        var customer = await _client.CreateCustomerAsync(admin);
+        var job = await _client.CreateJobAsync(admin, customer.Id, driverId: driver.Id);
+
+        var link = await _client.OkAsync<TrackingTokenDto>(HttpMethod.Post, $"/api/jobs/{job.Job.Id}/tracking-links", new { }, admin);
+        Assert.EndsWith($"/takip/#{link.Token}", link.Url);
+
+        var page = await _client.GetAsync("/takip/");
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        Assert.Contains("takip.js", await page.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync("/takip/takip.js")).StatusCode);
+
+        var tracking = await _client.OkAsync<PublicTrackingDto>(HttpMethod.Get, $"/api/tracking/{link.Token}");
+        Assert.Equal(job.Job.JobNumber, tracking.JobNumber);
+    }
 }

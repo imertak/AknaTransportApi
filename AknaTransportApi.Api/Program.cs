@@ -61,6 +61,10 @@ try
         await next();
     });
 
+    // Müşteri canlı takip sayfası: /takip/#<token> (wwwroot/takip).
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
+
     app.UseCors(ApiServiceExtensions.CorsPolicy);
     app.UseAuthentication();
     app.UseRateLimiter();
