@@ -61,3 +61,4 @@ global using AknaTransportApi.Api.Extensions;
 global using AknaTransportApi.Api.Filters;
 global using AknaTransportApi.Api.Middleware;
 global using AknaTransportApi.Api.Security;
+global using AknaTransportApi.Api.Realtime;

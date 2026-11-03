@@ -10,6 +10,8 @@ public interface ILocationService
 
     /// <summary>Şoförün tüm aktif (takip edilen) işlerine aynı konum akışını yazar.</summary>
     Task<DriverLocationUpdateResult> UpdateMyLocationAsync(DriverLocationRequest request, CancellationToken ct);
+    /// <summary>Gerçek zamanlı izleme için yetki: yönetici her işi, şoför yalnızca kendisine atanmış işi izleyebilir.</summary>
+    Task<bool> CanViewJobAsync(Guid jobId, Guid userId, bool isAdmin, CancellationToken ct);
     Task<LocationDto> GetLatestAsync(Guid jobId, CancellationToken ct);
     Task<PagedResult<LocationDto>> GetHistoryAsync(Guid jobId, LocationHistoryQuery query, CancellationToken ct);
     Task<IReadOnlyList<ActiveJobLocationDto>> GetActiveJobsAsync(CancellationToken ct);

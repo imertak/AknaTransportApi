@@ -71,6 +71,7 @@ try
     app.UseAuthorization();
 
     app.MapControllers();
+    app.MapHub<TrackingHub>(TrackingHub.Path, o => o.CloseOnAuthenticationExpiration = true);
     app.MapGet("/health", async (AppDbContext db, CancellationToken ct) =>
             await db.Database.CanConnectAsync(ct)
                 ? Results.Ok(new { status = "Healthy" })

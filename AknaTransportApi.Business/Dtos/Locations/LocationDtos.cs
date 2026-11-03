@@ -90,3 +90,9 @@ public sealed record TrackingTokenDto(string Token, string? Url, DateTime Expire
 
 /// <summary>Müşteri takip bağlantısı yanıtı: fiyat ve iç bilgiler içermez.</summary>
 public sealed record PublicTrackingDto(string JobNumber, JobStatus Status, string StoreName, DateOnly JobDate, string DeliveryAddress, LocationDto? Location, string? VehiclePlate = null);
+
+/// <summary>
+/// Gerçek zamanlı "iş değişti" ipucu. <see cref="DriverIds"/> işin şu anki ve (değiştiyse) önceki şoförüdür;
+/// ipucu yalnızca onlara ve yöneticilere gider. <see cref="Removed"/> iş silindiğinde/gizlendiğinde true olur.
+/// </summary>
+public sealed record JobChangedDto(Guid JobId, JobStatus Status, IReadOnlyList<Guid> DriverIds, bool Removed);

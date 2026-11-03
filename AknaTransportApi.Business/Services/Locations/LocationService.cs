@@ -137,6 +137,12 @@ public sealed class LocationService(
         }
     }
 
+    public async Task<bool> CanViewJobAsync(Guid jobId, Guid userId, bool isAdmin, CancellationToken ct)
+    {
+        var job = await jobs.QueryAsNoTracking().Where(j => j.Id == jobId).Select(j => new { j.AssignedDriverId }).FirstOrDefaultAsync(ct);
+        return job is not null && (isAdmin || job.AssignedDriverId == userId);
+    }
+
     public async Task<LocationDto> GetLatestAsync(Guid jobId, CancellationToken ct)
     {
         await EnsureCanViewAsync(jobId, ct);
