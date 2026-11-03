@@ -27,9 +27,14 @@
   function initMap() {
     if (map || typeof L === 'undefined') return;
     map = L.map('map', { zoomControl: true, attributionControl: true }).setView([41.015, 28.979], 10);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap'
+    // OpenStreetMap'in kendi karo sunucusu, Referer göndermeyen sayfaları "Access blocked" ile engelliyor
+    // (API tüm yanıtlarda Referrer-Policy: no-referrer gönderir). Bu yüzden OSM verisini sunan CARTO
+    // karoları kullanılır; karo isteklerinde yalnızca sitenin kökü Referer olarak gider.
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd',
+      maxZoom: 20,
+      referrerPolicy: 'strict-origin-when-cross-origin',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
     }).addTo(map);
   }
 
@@ -61,7 +66,9 @@
     var live = LIVE.indexOf(status) >= 0;
     el('status').textContent = STATUS[status] || status;
     el('status').className = 'badge' + (live && data.location ? ' live' : live ? ' idle' : '');
-    el('title').textContent = (data.storeName ? data.storeName + ' · ' : '') + data.jobNumber;
+    // Mağaza adı "Firma /" gibi sonda ayraçla kaydedilmiş olabilir; başlıkta temizlenir.
+    var store = String(data.storeName || '').replace(/[\s\/·-]+$/, '');
+    el('title').textContent = (store ? store + ' · ' : '') + data.jobNumber;
     el('date').textContent = formatDate(data.jobDate);
     el('address').textContent = data.deliveryAddress || '-';
     el('details').hidden = false;
