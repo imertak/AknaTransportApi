@@ -7,7 +7,7 @@ namespace AknaTransportApi.Business.Services.Outbox;
 /// <summary>Kurumsal Türkçe e-posta şablonları. Kullanıcı verisi HTML'e kodlanarak eklenir.</summary>
 public static class EmailTemplates
 {
-    public const string InvoiceSubject = "AKNA Transport - Faturanız ve Nakliye İş Dökümünüz";
+    public const string InvoiceSubject = "AKPINAR NAKLİYAT - Faturanız ve Nakliye İş Dökümünüz";
     public const string PasswordResetSubject = "AKNA Transport - Şifre Sıfırlama";
     private const string LogoContentId = "akna-logo";
 
@@ -23,15 +23,15 @@ public static class EmailTemplates
         return new EmailAttachment("akna-logo.png", buffer.ToArray(), "image/png") { ContentId = LogoContentId };
     }
 
-    public static string DraftInvoiceSubject(string invoiceNumber) => $"AKNA Transport - Fatura Taslağı ve Nakliye İş Dökümü ({invoiceNumber})";
+    public static string DraftInvoiceSubject(string invoiceNumber) => $"AKPINAR NAKLİYAT - Fatura Taslağı ve Nakliye İş Dökümü ({invoiceNumber})";
 
     public static (string Html, string Text) Invoice(InvoiceEmailModel m)
     {
         var amount = Money(m.Payable, m.Currency);
         var date = m.InvoiceDate.ToString("dd.MM.yyyy", Tr);
         var intro = m.Draft
-            ? "AKNA Transport üzerinden gerçekleştirdiğiniz nakliye hizmetlerine ait fatura taslağınız hazırlanmıştır. Kontrolünüz için taslak fatura ve iş dökümü ektedir."
-            : "AKNA Transport üzerinden gerçekleştirdiğiniz nakliye hizmetlerine ait faturanız kesilmiştir. Faturanızı ve ilgili nakliye işlerinin detaylı dökümünü ekte bulabilirsiniz.";
+            ? "Akpınar Nakliyat üzerinden gerçekleştirdiğiniz nakliye hizmetlerine ait fatura taslağınız hazırlanmıştır. Kontrolünüz için taslak fatura ve iş dökümü ektedir."
+            : "Akpınar Nakliyat üzerinden gerçekleştirdiğiniz nakliye hizmetlerine ait faturanız kesilmiştir. Faturanızı ve ilgili nakliye işlerinin detaylı dökümünü ekte bulabilirsiniz.";
         const string draftNote = "Bu belge taslaktır ve resmi fatura yerine geçmez. Resmi e-Arşiv faturanız kesildiğinde ayrıca gönderilecektir.";
         var bank = m.Iban is null ? null : m.BankName is null ? m.Iban : $"{m.Iban} ({m.BankName})";
 
@@ -48,11 +48,9 @@ public static class EmailTemplates
             Ödenecek tutar: {amount}
             {(bank is null ? "" : $"IBAN: {bank}")}
 
-            Ekler: {string.Join(", ", m.Attachments.Select(a => IsOriginal(a) ? $"{a} (GİB e-Arşiv portalındaki orijinal fatura)" : a))}
-
             Bizi tercih ettiğiniz için teşekkür ederiz.
 
-            AKNA Transport
+            Akpınar Nakliyat
             """;
 
         var rows = new List<(string Label, string Value)>
@@ -92,10 +90,8 @@ public static class EmailTemplates
               </td></tr>
             </table>
             {(bank is null ? "" : $"""<p style="margin:16px 0 0;font-size:13px;color:#333">Ödeme için IBAN: <strong style="font-family:monospace">{Encode(bank)}</strong></p>""")}
-            <p style="margin:24px 0 6px;font-size:12px;color:#6b6b70;letter-spacing:1px">EKLER</p>
-            <table role="presentation" cellpadding="0" cellspacing="0">{attachments}</table>
             <p style="margin:24px 0 0;color:#333">Bizi tercih ettiğiniz için teşekkür ederiz.</p>
-            <p style="margin:4px 0 0"><strong>AKNA Transport</strong></p>
+            <p style="margin:4px 0 0"><strong>AKPINAR NAKLİYAT</strong></p>
             """);
         return (html, text);
     }
@@ -153,7 +149,7 @@ public static class EmailTemplates
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e6e6e8">
               <tr><td align="center" style="background:#000000;padding:28px 28px 24px">
                 <img src="cid:{LogoContentId}" width="160" height="38" alt="AKNA" style="display:block;border:0;width:160px;height:38px;color:#ffffff;font-size:28px;font-weight:800;letter-spacing:8px">
-                <div style="color:#8a8a90;font-size:10px;font-weight:600;letter-spacing:5px;margin-top:10px">TRANSPORT</div>
+                <div style="color:#8a8a90;font-size:10px;font-weight:600;letter-spacing:5px;margin-top:10px">AKPINAR NAKLİYAT</div>
               </td></tr>
               <tr><td style="padding:28px">
               {body}

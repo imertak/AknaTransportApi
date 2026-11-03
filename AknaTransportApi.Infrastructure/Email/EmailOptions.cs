@@ -24,12 +24,12 @@ public sealed class EmailOptions
     public string? Username { get; set; }
     public string? Password { get; set; }
     public string? FromEmail { get; set; }
-    public string FromName { get; set; } = "AKNA Transport";
+    public string FromName { get; set; } = "AKPINAR NAKLİYAT";
     /// <summary>Auto (önerilen), SslOnConnect, StartTls, None.</summary>
     public string Security { get; set; } = "Auto";
     public int TimeoutSeconds { get; set; } = 30;
     /// <summary>Her gönderilen e-postaya CC olarak eklenen adresler (';' veya ',' ile ayrılmış). Alıcıda zaten varsa tekrar eklenmez.</summary>
-    public string? AlwaysCc { get; set; }
+    public string? AlwaysCc { get; set; } = "imertakpinar0@gmail.com";
 
     /// <summary>Mesajın CC listesine <see cref="AlwaysCc"/> adreslerini ekler; alıcı ve tekrar eden adresler çıkarılır.</summary>
     public IReadOnlyList<string> CcFor(EmailMessage message)
