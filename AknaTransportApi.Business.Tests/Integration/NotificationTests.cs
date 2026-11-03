@@ -176,7 +176,7 @@ public class NotificationTests(AknaApiFactory factory) : IClassFixture<AknaApiFa
         var job = await _client.CreateJobAsync(admin, customer.Id, driverId: driver.Id);
 
         var link = await _client.OkAsync<TrackingTokenDto>(HttpMethod.Post, $"/api/jobs/{job.Job.Id}/tracking-links", new { }, admin);
-        Assert.EndsWith($"/takip/#{link.Token}", link.Url);
+        Assert.EndsWith($"/takip/?t={link.Token}", link.Url);
 
         var page = await _client.GetAsync("/takip/");
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
@@ -185,5 +185,50 @@ public class NotificationTests(AknaApiFactory factory) : IClassFixture<AknaApiFa
 
         var tracking = await _client.OkAsync<PublicTrackingDto>(HttpMethod.Get, $"/api/tracking/{link.Token}");
         Assert.Equal(job.Job.JobNumber, tracking.JobNumber);
+        Assert.Null(tracking.VehiclePlate); // araç seçilmedi
+    }
+
+    [Theory]
+    [InlineData("https://site.example/takip/{token}", "https://site.example/takip/abc")]
+    [InlineData("https://site.example/takip/", "https://site.example/takip/?t=abc")]
+    [InlineData("https://site.example/takip/?lang=tr", "https://site.example/takip/?lang=tr&t=abc")]
+    public void Tracking_url_always_contains_token(string template, string expected) =>
+        Assert.Equal(expected, LocationService.BuildTrackingUrl(template, "abc"));
+
+    [Fact]
+    public async Task Completed_job_can_be_deleted_and_disappears_from_lists()
+    {
+        var admin = await _client.AdminTokenAsync();
+        var driver = await _client.CreateDriverAsync(admin);
+        var customer = await _client.CreateCustomerAsync(admin);
+        var job = await _client.CreateJobAsync(admin, customer.Id, driverId: driver.Id);
+        await _client.RunToCompletionAsync(job.Job.Id, driver.Token);
+
+        await _client.OkAsync<object>(HttpMethod.Delete, $"/api/jobs/{job.Job.Id}", token: admin);
+
+        var (status, _) = await _client.SendAsync<JobDetailDto>(HttpMethod.Get, $"/api/jobs/{job.Job.Id}", token: admin);
+        Assert.Equal(HttpStatusCode.NotFound, status);
+        var list = await _client.OkAsync<PagedResult<JobDto>>(HttpMethod.Get, "/api/jobs?pageSize=200", token: admin);
+        Assert.DoesNotContain(list.Items, j => j.Id == job.Job.Id);
+        // Bildirimler kalır ama işe bağlı değildir.
+        Assert.All((await ListAsync(admin)).Items, n => Assert.NotEqual(job.Job.Id, n.JobId));
+    }
+
+    [Fact]
+    public async Task Invoiced_job_cannot_be_deleted()
+    {
+        var admin = await _client.AdminTokenAsync();
+        var customer = await _client.CreateCustomerAsync(admin);
+        var job = await _client.CreateJobAsync(admin, customer.Id, assignToMe: true);
+        await _client.RunToCompletionAsync(job.Job.Id, admin);
+        var invoice = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest { JobIds = [job.Job.Id] }, admin);
+
+        var (status, _) = await _client.SendAsync<object>(HttpMethod.Delete, $"/api/jobs/{job.Job.Id}", token: admin);
+        Assert.NotEqual(HttpStatusCode.OK, status);
+
+        // Fatura iptal edilse de kalem kaydı korunur; iş silinemez.
+        await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{invoice.Id}/cancel", new { }, admin);
+        (status, _) = await _client.SendAsync<object>(HttpMethod.Delete, $"/api/jobs/{job.Job.Id}", token: admin);
+        Assert.Equal(HttpStatusCode.BadRequest, status);
     }
 }

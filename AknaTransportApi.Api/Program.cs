@@ -61,7 +61,7 @@ try
         await next();
     });
 
-    // Müşteri canlı takip sayfası: /takip/#<token> (wwwroot/takip).
+    // Müşteri canlı takip sayfası: /takip/?t=<token> (wwwroot/takip).
     app.UseDefaultFiles();
     app.UseStaticFiles();
 

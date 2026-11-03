@@ -203,8 +203,21 @@ public sealed class LocationService(
         };
         trackingTokens.Add(entity);
         await unitOfWork.SaveChangesAsync(ct);
-        var url = appOptions.Value.TrackingUrl?.Replace("{token}", Uri.EscapeDataString(raw), StringComparison.Ordinal);
+        var url = BuildTrackingUrl(appOptions.Value.TrackingUrl, raw);
         return new TrackingTokenDto(raw, url, entity.ExpiresAt);
+    }
+
+    /// <summary>
+    /// App:TrackingUrl içindeki {token} yer tutucusunu doldurur. Yer tutucu unutulmuşsa (ör. "https://site/takip/")
+    /// token ?t= parametresi olarak eklenir; böylece bağlantı hiçbir zaman token'sız gönderilmez.
+    /// </summary>
+    public static string? BuildTrackingUrl(string? template, string token)
+    {
+        if (string.IsNullOrWhiteSpace(template)) return null;
+        var escaped = Uri.EscapeDataString(token);
+        var t = template.Trim();
+        if (t.Contains("{token}", StringComparison.Ordinal)) return t.Replace("{token}", escaped, StringComparison.Ordinal);
+        return t + (t.Contains('?') ? "&" : "?") + "t=" + escaped;
     }
 
     public async Task RevokeTrackingTokensAsync(Guid jobId, CancellationToken ct)
@@ -226,13 +239,13 @@ public sealed class LocationService(
                          join j in jobs.QueryAsNoTracking() on t.JobId equals j.Id
                          join l in latestLocations.QueryAsNoTracking() on j.Id equals l.JobId into lj
                          from l in lj.DefaultIfEmpty()
-                         select new { j.JobNumber, j.Status, j.StoreName, j.JobDate, j.DeliveryAddress, Location = l })
+                         select new { j.JobNumber, j.Status, j.StoreName, j.JobDate, j.DeliveryAddress, Plate = j.AssignedVehicle != null ? j.AssignedVehicle.PlateNumber : null, Location = l })
                         .FirstOrDefaultAsync(ct)
                   ?? throw new NotFoundException("Takip bağlantısı geçersiz veya süresi dolmuş.");
 
         // Konum yalnızca araç hareket halindeyken paylaşılır.
         var location = row.Location is not null && trackable.Contains(row.Status) ? ToDto(row.Location) : null;
-        return new PublicTrackingDto(row.JobNumber, row.Status, row.StoreName, row.JobDate, row.DeliveryAddress, location);
+        return new PublicTrackingDto(row.JobNumber, row.Status, row.StoreName, row.JobDate, row.DeliveryAddress, location, row.Plate);
     }
 
     public async Task<int> PurgeExpiredHistoryAsync(CancellationToken ct)
