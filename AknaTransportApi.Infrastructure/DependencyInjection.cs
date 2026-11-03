@@ -22,6 +22,7 @@ public static class DependencyInjection
         services.AddOptions<SmsOptions>().Bind(configuration.GetSection(SmsOptions.SectionName));
         services.AddOptions<EArchiveOptions>().Bind(configuration.GetSection(EArchiveOptions.SectionName));
         services.AddOptions<StorageOptions>().Bind(configuration.GetSection(StorageOptions.SectionName));
+        services.AddOptions<PushOptions>().Bind(configuration.GetSection(PushOptions.SectionName));
         services.AddOptions<BackgroundJobOptions>().Bind(configuration.GetSection(BackgroundJobOptions.SectionName));
         services.AddOptions<JwtOptions>().Bind(configuration.GetSection(JwtOptions.SectionName))
             .Validate(o => o.Secret.Length >= 32, "Jwt:Secret en az 32 karakter olmalıdır (environment variable: Jwt__Secret).")
@@ -72,6 +73,9 @@ public static class DependencyInjection
         services.AddSingleton<IHtmlPdfRenderer, ChromeHtmlPdfRenderer>();
         services.AddSingleton<IFileStorage, LocalFileStorage>();
         services.AddSingleton<ILocationBroadcaster, NullLocationBroadcaster>();
+        // Telefon bildirimleri: Expo Push API (Push__Enabled=false ile kapatılır).
+        services.AddHttpClient<ExpoPushNotificationSender>();
+        services.AddTransient<IPushNotificationSender>(sp => sp.GetRequiredService<ExpoPushNotificationSender>());
 
         // Arka plan işleri (DatabaseInitializer ilk sırada: migration/seed işleyicilerden önce tamamlanır)
         services.AddHostedService<DatabaseInitializer>();

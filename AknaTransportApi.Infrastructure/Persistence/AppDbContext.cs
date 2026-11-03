@@ -24,6 +24,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider c
     public DbSet<InvoiceItem> InvoiceItems => Set<InvoiceItem>();
     public DbSet<EmailLog> EmailLogs => Set<EmailLog>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<PushDevice> PushDevices => Set<PushDevice>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
