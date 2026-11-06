@@ -120,6 +120,31 @@ public class GibPortalInvoiceTests(GibPortalApiFactory factory) : IClassFixture<
     }
 
     [Fact]
+    public async Task Single_line_invoice_sends_one_freight_row_but_keeps_jobs()
+    {
+        var (admin, firstJobId) = await CompletedJobAsync();
+        var first = await _client.OkAsync<JobDetailDto>(HttpMethod.Get, $"/api/jobs/{firstJobId}", token: admin);
+        var second = await _client.CreateJobAsync(admin, first.Job.CustomerId, assignToMe: true);
+        await _client.RunToCompletionAsync(second.Job.Id, admin);
+
+        var invoice = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices",
+            new CreateInvoiceRequest { JobIds = [firstJobId, second.Job.Id], NoWithholding = true, SingleLine = true }, admin);
+        Assert.True(invoice.SingleLine);
+        // İşler kalem olarak saklanır (iş dökümü bunlardan üretilir).
+        Assert.Equal(2, invoice.Items.Count);
+
+        var pending = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{invoice.Id}/issue", token: admin);
+        Assert.Equal(InvoiceStatus.Pending, pending.Status);
+
+        // Portala tek satır gider: "Nakliye Bedeli", tutar faturanın ara toplamı.
+        var rows = factory.Portal.Created.Last()["malHizmetTable"]!.AsArray();
+        var row = Assert.Single(rows)!;
+        Assert.Equal("Nakliye Bedeli", row["malHizmet"]!.ToString());
+        Assert.Equal(invoice.SubTotal.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), row["fiyat"]!.ToString());
+        Assert.Equal(invoice.VatAmount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), row["kdvTutari"]!.ToString());
+    }
+
+    [Fact]
     public async Task Portal_draft_can_be_discarded_and_invoice_becomes_editable()
     {
         var (admin, jobId) = await CompletedJobAsync();

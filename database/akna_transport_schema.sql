@@ -1043,3 +1043,21 @@ BEGIN
 END $EF$;
 COMMIT;
 
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261106064500_AddInvoiceSingleLine') THEN
+    ALTER TABLE invoices ADD "SingleLine" boolean NOT NULL DEFAULT FALSE;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261106064500_AddInvoiceSingleLine') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261106064500_AddInvoiceSingleLine', '9.0.10');
+    END IF;
+END $EF$;
+COMMIT;

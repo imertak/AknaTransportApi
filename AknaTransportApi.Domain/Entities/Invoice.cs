@@ -27,6 +27,11 @@ public class Invoice : Entity, IHasTimestamps
     public string Currency { get; set; } = Money.DefaultCurrency;
     public InvoiceStatus Status { get; private set; } = InvoiceStatus.Draft;
     public string? Notes { get; set; }
+    /// <summary>
+    /// true: fatura işleri tek tek yazmadan tek kalemde ("Nakliye Bedeli") kesilir. İşler yine kalem olarak
+    /// saklanır ve iş dökümünde ayrı ayrı yer alır; yalnızca faturaya (e-Arşiv ve PDF) yazılan satırlar değişir.
+    /// </summary>
+    public bool SingleLine { get; set; }
 
     /// <summary>Sağlayıcının döndürdüğü belge kimliği (ETTN/UUID).</summary>
     public string? EArchiveReference { get; private set; }
@@ -70,6 +75,9 @@ public class Invoice : Entity, IHasTimestamps
         PayableAmount = GrandTotal - WithholdingAmount;
         Touch();
     }
+
+    /// <summary>Tek kalemli faturada yazılan kalem adı.</summary>
+    public const string SingleLineDescription = "Nakliye Bedeli";
 
     /// <summary>Faturanın "Yalnız ..." satırı (ödenecek tutarın yazıyla gösterimi).</summary>
     public string AmountInWordsText => AmountInWords.Write(PayableAmount, Currency);
