@@ -86,7 +86,9 @@ public sealed record InvoiceDetailDto(
     /// true: fatura sağlayıcıda taslak olarak bekliyor, SMS koduyla imzalanması gerekiyor (GİB portalı).
     bool RequiresSmsSignature,
     /// Elle gönderilen son e-posta ("E-posta gönder"; taslak faturalar dahil).
-    InvoiceEmailDto? ManualEmail = null);
+    InvoiceEmailDto? ManualEmail = null,
+    /// true: faturaya işler tek tek değil, tek kalem "Nakliye Bedeli" olarak yazılır (iş dökümü değişmez).
+    bool SingleLine = false);
 
 public sealed record WithholdingTypeDto(string Code, int Rate, string Fraction, string Name);
 
@@ -113,6 +115,8 @@ public sealed class CreateInvoiceRequest
     public bool NoWithholding { get; set; }
     /// <summary>Faturada yazılacak IBAN. Boşsa App:CompanyIban kullanılır.</summary>
     public string? Iban { get; set; }
+    /// <summary>true: faturaya tek kalem "Nakliye Bedeli" yazılır; işler yalnızca iş dökümünde ayrı ayrı yer alır.</summary>
+    public bool SingleLine { get; set; }
 }
 
 public sealed class UpdateInvoiceRequest
@@ -125,6 +129,8 @@ public sealed class UpdateInvoiceRequest
     public string? WithholdingCode { get; set; }
     /// <summary>Faturada yazılacak IBAN. Boşsa App:CompanyIban kullanılır.</summary>
     public string? Iban { get; set; }
+    /// <summary>true: faturaya tek kalem "Nakliye Bedeli" yazılır; işler yalnızca iş dökümünde ayrı ayrı yer alır.</summary>
+    public bool SingleLine { get; set; }
 }
 
 public sealed class CancelInvoiceRequest

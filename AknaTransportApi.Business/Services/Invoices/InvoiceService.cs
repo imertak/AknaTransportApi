@@ -79,7 +79,7 @@ public sealed class InvoiceService(
             i.VatAmount, i.GrandTotal, i.Currency, i.Status, i.Status == InvoiceStatus.Issued, i.Notes, i.EArchiveProvider, i.EArchiveReference,
             i.EArchiveInvoiceNumber, i.EArchiveInvoiceUrl, i.LastError, i.CreatedByUserId, i.IssuedAt, i.CancelledAt, i.CreatedAt, i.UpdatedAt, items, email,
             i.WithholdingCode, withholding?.Name, i.WithholdingRate, i.WithholdingAmount, i.PayableAmount, i.AmountInWordsText,
-            i.Iban is null ? null : Iban.Format(i.Iban), i.Iban is null ? null : appOptions.Value.CompanyBankName.TrimOrNull(), ComposeDocumentNote(i), requiresSms, manualEmail);
+            i.Iban is null ? null : Iban.Format(i.Iban), i.Iban is null ? null : appOptions.Value.CompanyBankName.TrimOrNull(), ComposeDocumentNote(i), requiresSms, manualEmail, i.SingleLine);
     }
 
     public IReadOnlyList<WithholdingTypeDto> GetWithholdingTypes() =>
@@ -142,6 +142,7 @@ public sealed class InvoiceService(
                 CreatedByUserId = currentUser.UserId,
                 InvoiceNumber = await numberGenerator.NextInvoiceNumberAsync(invoiceDate, token),
                 Iban = iban,
+                SingleLine = request.SingleLine,
             };
             foreach (var job in selected) invoice.Items.Add(CreateItem(invoice.Id, job));
             invoice.Recalculate(request.VatRate ?? appOptions.Value.DefaultVatRate, withholding);
@@ -185,6 +186,7 @@ public sealed class InvoiceService(
             invoice.InvoiceDate = request.InvoiceDate;
             invoice.Notes = request.Notes.TrimOrNull();
             invoice.Iban = iban;
+            invoice.SingleLine = request.SingleLine;
             invoice.Recalculate(request.VatRate, withholding);
             await unitOfWork.SaveChangesAsync(token);
             await ClaimJobsAsync(invoice.Id, request.JobIds, now, token);
@@ -367,8 +369,10 @@ public sealed class InvoiceService(
     private async Task<byte[]> RenderPdfAsync(Invoice invoice, bool official, CancellationToken ct)
     {
         var customer = invoice.Customer ?? await customers.QueryAsNoTracking().FirstAsync(c => c.Id == invoice.CustomerId, ct);
-        var lines = await invoiceItems.QueryAsNoTracking().Where(x => x.InvoiceId == invoice.Id).OrderBy(x => x.Job!.JobDate)
-            .Select(x => new DraftInvoiceLine(x.Description, x.Quantity, x.UnitPrice, x.LineTotal)).ToListAsync(ct);
+        var lines = invoice.SingleLine
+            ? new List<DraftInvoiceLine> { new(Invoice.SingleLineDescription, 1, invoice.SubTotal, invoice.SubTotal) }
+            : await invoiceItems.QueryAsNoTracking().Where(x => x.InvoiceId == invoice.Id).OrderBy(x => x.Job!.JobDate)
+                .Select(x => new DraftInvoiceLine(x.Description, x.Quantity, x.UnitPrice, x.LineTotal)).ToListAsync(ct);
         var withholding = WithholdingTypes.Find(invoice.WithholdingCode);
         return draftPdf.Generate(new DraftInvoiceDocument(invoice.InvoiceNumber, invoice.InvoiceDate, invoice.Status, customer.CompanyName, customer.TaxOffice,
             customer.TaxNumber, customer.Address, lines, invoice.SubTotal, invoice.VatRate, invoice.VatAmount, invoice.GrandTotal, invoice.Currency,
@@ -715,7 +719,10 @@ public sealed class InvoiceService(
         invoice.InvoiceDate,
         invoice.Currency,
         new EArchiveParty(customer.CompanyName, customer.TaxNumber, customer.TaxOffice, customer.Address, customer.Email, customer.PhoneNumber),
-        invoice.Items.Select(i => new EArchiveLine(i.Description, i.Quantity, i.UnitPrice, i.VatRate, i.LineTotal, Money.CalculateVat(i.LineTotal, i.VatRate))).ToList(),
+        // Tek kalemli faturada işler tek satırda toplanır; KDV faturanın toplam KDV'siyle aynı kalır.
+        invoice.SingleLine
+            ? new List<EArchiveLine> { new(Invoice.SingleLineDescription, 1, invoice.SubTotal, invoice.VatRate, invoice.SubTotal, invoice.VatAmount) }
+            : invoice.Items.Select(i => new EArchiveLine(i.Description, i.Quantity, i.UnitPrice, i.VatRate, i.LineTotal, Money.CalculateVat(i.LineTotal, i.VatRate))).ToList(),
         invoice.SubTotal,
         invoice.VatAmount,
         invoice.GrandTotal,
