@@ -17,5 +17,10 @@ dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 12px
 dt { color: var(--muted); }
 dd { margin: 0; }
 .button { display: block; margin-top: 14px; padding: 12px; text-align: center; border-radius: 999px; background: var(--ink); color: #fff; text-decoration: none; font-weight: 600; }
-.truck { width: 18px; height: 18px; border-radius: 50%; background: var(--ok); border: 3px solid #fff; box-shadow: 0 0 0 2px var(--ok), 0 2px 6px rgba(0,0,0,.3); }
+/* Araç işaretçisi: uygulamadaki gibi siyah daire içinde yön oku, altında plaka. */
+.vehicle { width: 96px; display: flex; flex-direction: column; align-items: center; pointer-events: none; }
+.vehicle-body { width: 34px; height: 34px; margin: 4px; border-radius: 50%; background: var(--ink); border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.3); display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.vehicle-arrow { display: flex; transition: transform .3s ease; }
+.vehicle-label { margin-top: 2px; padding: 1px 6px; border-radius: 6px; background: #fff; border: 1px solid #cfcfcf; font-size: 11px; font-weight: 700; letter-spacing: .3px; white-space: nowrap; max-width: 96px; overflow: hidden; text-overflow: ellipsis; }
+.vehicle-label[hidden] { display: none; }
 .plate { font-weight: 700; letter-spacing: .5px; }

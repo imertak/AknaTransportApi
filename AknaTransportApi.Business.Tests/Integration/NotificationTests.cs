@@ -182,6 +182,8 @@ public class NotificationTests(AknaApiFactory factory) : IClassFixture<AknaApiFa
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
         Assert.Contains("takip.js", await page.Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync("/takip/takip.js")).StatusCode);
+        // Uygulamadaki haritanın stili (MapLibre) takip sayfasıyla birlikte sunulur.
+        Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync("/takip/harita-stili.json")).StatusCode);
 
         var tracking = await _client.OkAsync<PublicTrackingDto>(HttpMethod.Get, $"/api/tracking/{link.Token}");
         Assert.Equal(job.Job.JobNumber, tracking.JobNumber);
