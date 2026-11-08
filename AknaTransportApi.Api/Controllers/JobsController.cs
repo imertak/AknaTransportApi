@@ -101,7 +101,7 @@ public sealed class JobsController(IJobService jobService, ILocationService loca
     public async Task<ActionResult<BaseResponse<JobDetailDto>>> StartDelivery(Guid id, [FromBody] JobActionRequest? request, CancellationToken ct) =>
         Success(await jobService.StartDeliveryAsync(id, request ?? new(), ct), "Teslimata çıkıldı.");
 
-    /// <summary>Delivering → Completed</summary>
+    /// <summary>Şoför: Delivering → Completed. Yönetici: tamamlanmamış her durumdan (atanmamış iş dahil) → Completed.</summary>
     [HttpPatch("{id:guid}/complete")]
     public async Task<ActionResult<BaseResponse<JobDetailDto>>> Complete(Guid id, [FromBody] JobActionRequest? request, CancellationToken ct) =>
         Success(await jobService.CompleteAsync(id, request ?? new(), ct), "İş tamamlandı.");

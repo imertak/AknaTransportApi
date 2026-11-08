@@ -201,8 +201,14 @@ public sealed class JobService(
     public Task<JobDetailDto> StartDeliveryAsync(Guid id, JobActionRequest request, CancellationToken ct) =>
         MutateAsync(id, job => job.StartDelivery(currentUser.UserId, Now, request.Note.TrimOrNull()), requireOwnership: true, ct);
 
+    /// <summary>
+    /// Şoför yalnızca teslimattaki kendi işini tamamlar. Yönetici her işi (atanmamış olanlar dahil) tamamlanmamış
+    /// her aşamadan doğrudan tamamlayabilir.
+    /// </summary>
     public Task<JobDetailDto> CompleteAsync(Guid id, JobActionRequest request, CancellationToken ct) =>
-        MutateAsync(id, job => job.Complete(currentUser.UserId, Now, request.Note.TrimOrNull()), requireOwnership: true, ct);
+        currentUser.IsAdmin
+            ? MutateAsync(id, job => job.CompleteByAdmin(currentUser.UserId, Now, request.Note.TrimOrNull()), requireOwnership: false, ct)
+            : MutateAsync(id, job => job.Complete(currentUser.UserId, Now, request.Note.TrimOrNull()), requireOwnership: true, ct);
 
     /// <summary>
     /// İşi iptal eder. Tamamlanmamış her aşamada yapılabilir; neden zorunludur. İptal tarihi, iptal eden kullanıcı ve

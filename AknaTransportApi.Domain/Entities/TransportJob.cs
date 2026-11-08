@@ -164,6 +164,24 @@ public class TransportJob : Entity, IHasTimestamps
     }
 
     /// <summary>
+    /// Yönetici işi şoföre atamadan veya ara adımları (kabul, yola çıkma, yükleme, teslimat) beklemeden doğrudan tamamlar.
+    /// Tamamlanmamış her aşamada yapılabilir; atanmış şoför varsa geçmiş için korunur. Kapanmış (tamamlanmış/iptal) işe uygulanamaz.
+    /// </summary>
+    public void CompleteByAdmin(Guid adminId, DateTime now, string? note = null)
+    {
+        if (Status == JobStatus.Delivering)
+        {
+            Complete(adminId, now, note);
+            return;
+        }
+        if (IsClosed) throw new InvalidJobStatusTransitionException(Status, "tamamlama");
+        var from = Status;
+        Status = JobStatus.Completed;
+        CompletedAt = now;
+        Record(from, Status, adminId, now, note ?? "İş yönetici tarafından doğrudan tamamlandı.");
+    }
+
+    /// <summary>
     /// İşi iptal eder. Tamamlanmamış her aşamada (bekliyor, atandı, kabul edildi, yolda, yüklemede, teslimatta) yapılabilir.
     /// Zaten iptal edilmiş iş için hiçbir şey yapmaz ve false döner (tekrarlanan istek veri değiştirmez).
     /// Tamamlanmış veya faturaya eklenmiş iş iptal edilemez; finansal kayıt bozulmaz.

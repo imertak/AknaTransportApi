@@ -157,6 +157,32 @@ public class JobTests(AknaApiFactory factory) : IClassFixture<AknaApiFactory>
     }
 
     [Fact]
+    public async Task Admin_can_complete_unassigned_job_directly()
+    {
+        var admin = await _client.AdminTokenAsync();
+        var driver = await _client.CreateDriverAsync(admin);
+        var customer = await _client.CreateCustomerAsync(admin);
+        var job = await _client.CreateJobAsync(admin, customer.Id);
+        Assert.Equal(JobStatus.Pending, job.Job.Status);
+
+        var completed = await _client.OkAsync<JobDetailDto>(HttpMethod.Patch, $"/api/jobs/{job.Job.Id}/complete", new { }, admin);
+        Assert.Equal(JobStatus.Completed, completed.Job.Status);
+        Assert.Null(completed.Job.AssignedDriverId);
+        Assert.NotNull(completed.Job.CompletedAt);
+        Assert.Equal(JobStatus.Pending, completed.StatusHistory[^1].FromStatus);
+        Assert.Equal(JobStatus.Completed, completed.StatusHistory[^1].ToStatus);
+
+        // Tamamlanmış iş tekrar tamamlanamaz.
+        var (again, _) = await _client.SendAsync<JobDetailDto>(HttpMethod.Patch, $"/api/jobs/{job.Job.Id}/complete", new { }, admin);
+        Assert.Equal(HttpStatusCode.Conflict, again);
+
+        // Şoför ise yalnızca teslimattaki kendi işini tamamlayabilir.
+        var assigned = await _client.CreateJobAsync(admin, customer.Id, driver.Id);
+        var (early, _) = await _client.SendAsync<JobDetailDto>(HttpMethod.Patch, $"/api/jobs/{assigned.Job.Id}/complete", new { }, driver.Token);
+        Assert.Equal(HttpStatusCode.Conflict, early);
+    }
+
+    [Fact]
     public async Task Completed_job_cannot_be_restarted()
     {
         var admin = await _client.AdminTokenAsync();
