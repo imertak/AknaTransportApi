@@ -56,6 +56,29 @@ public class InvoiceTests(AknaApiFactory factory) : IClassFixture<AknaApiFactory
     }
 
     [Fact]
+    public async Task Only_cancelled_invoice_can_be_deleted()
+    {
+        var (admin, _, jobId) = await CompletedJobAsync();
+        var invoice = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest { JobIds = [jobId] }, admin);
+
+        var (draftStatus, _) = await _client.SendAsync<object>(HttpMethod.Delete, $"/api/invoices/{invoice.Id}", null, admin);
+        Assert.Equal(HttpStatusCode.Conflict, draftStatus);
+
+        // Taslak e-postayla gönderilmiş olsun: e-posta kaydı silmeyi engellememeli.
+        await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{invoice.Id}/send-email", null, admin);
+        await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{invoice.Id}/cancel", new CancelInvoiceRequest { Reason = "Hatalı" }, admin);
+        var (status, _) = await _client.SendAsync<object>(HttpMethod.Delete, $"/api/invoices/{invoice.Id}", null, admin);
+        Assert.Equal(HttpStatusCode.OK, status);
+
+        var (getStatus, _) = await _client.SendAsync<InvoiceDetailDto>(HttpMethod.Get, $"/api/invoices/{invoice.Id}", null, admin);
+        Assert.Equal(HttpStatusCode.NotFound, getStatus);
+        Assert.False(await QueryAsync(db => db.Set<InvoiceItem>().AnyAsync(i => i.InvoiceId == invoice.Id)));
+        Assert.False(await QueryAsync(db => db.Set<EmailLog>().AnyAsync(e => e.InvoiceId == invoice.Id)));
+        // İş yeniden faturalanabilir.
+        await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest { JobIds = [jobId] }, admin);
+    }
+
+    [Fact]
     public async Task Admin_can_invoice_unfinished_job_but_not_cancelled_one()
     {
         var admin = await _client.AdminTokenAsync();

@@ -33,6 +33,8 @@ public interface IInvoiceService
 
     IReadOnlyList<WithholdingTypeDto> GetWithholdingTypes();
     Task<InvoiceDetailDto> CancelAsync(Guid id, CancelInvoiceRequest request, CancellationToken ct);
+    /// <summary>İptal edilmiş faturayı kalemleri, e-posta kayıtları ve saklanan PDF'iyle birlikte kalıcı olarak siler.</summary>
+    Task DeleteAsync(Guid id, CancellationToken ct);
     Task<InvoiceDetailDto> ResendEmailAsync(Guid id, CancellationToken ct);
 
     /// <summary>Faturayı (taslak veya kesilmiş) iş dökümüyle birlikte müşteriye e-postayla gönderir. Taslakta "resmi fatura değildir" ibareli PDF eklenir; fatura durumu değişmez.</summary>

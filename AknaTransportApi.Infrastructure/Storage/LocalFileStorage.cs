@@ -35,6 +35,13 @@ public sealed class LocalFileStorage(IOptions<StorageOptions> options) : IFileSt
         return File.Exists(full) ? await File.ReadAllBytesAsync(full, cancellationToken) : null;
     }
 
+    public Task DeleteAsync(string relativePath, CancellationToken cancellationToken = default)
+    {
+        var full = Resolve(relativePath);
+        if (File.Exists(full)) File.Delete(full);
+        return Task.CompletedTask;
+    }
+
     private string Resolve(string relative)
     {
         var full = Path.GetFullPath(Path.Combine(_root, relative));

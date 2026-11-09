@@ -270,6 +270,32 @@ public sealed class InvoiceService(
         return await GetAsync(id, ct);
     }
 
+    public async Task DeleteAsync(Guid id, CancellationToken ct)
+    {
+        var invoice = await invoices.GetByIdAsync(id, ct) ?? throw NotFoundException.For("Fatura");
+        invoice.EnsureDeletable();
+        var pdfPath = invoice.InvoicePdfPath;
+
+        await unitOfWork.ExecuteInTransactionAsync(async token =>
+        {
+            // İptalde işler faturadan zaten çıkarılır; eski kayıtlara karşı burada da bağ koparılır.
+            await jobs.Query().Where(j => j.InvoiceId == id).ExecuteUpdateAsync(s => s.SetProperty(j => j.InvoiceId, (Guid?)null), token);
+            await emailLogs.Query().Where(e => e.InvoiceId == id).ExecuteDeleteAsync(token);
+            await invoiceItems.Query().Where(i => i.InvoiceId == id).ExecuteDeleteAsync(token);
+            invoices.Remove(invoice);
+            await unitOfWork.SaveChangesAsync(token);
+            return true;
+        }, ct);
+
+        // Kuyrukta kalmış e-posta mesajı, kaydı bulunamadığı için kalıcı hata ile düşer.
+        if (pdfPath is not null)
+        {
+            try { await fileStorage.DeleteAsync(pdfPath, ct); }
+            catch (Exception ex) { logger.LogWarning(ex, "Silinen faturanın PDF dosyası kaldırılamadı. InvoiceId: {InvoiceId}", id); }
+        }
+        logger.LogInformation("İptal edilmiş fatura silindi. InvoiceId: {InvoiceId}", id);
+    }
+
     public async Task<InvoiceDetailDto> ResendEmailAsync(Guid id, CancellationToken ct)
     {
         var now = clock.GetUtcNow().UtcDateTime;

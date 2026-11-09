@@ -147,6 +147,12 @@ public class Invoice : Entity, IHasTimestamps
         Touch();
     }
 
+    /// <summary>Yalnızca iptal edilmiş fatura kalıcı olarak silinebilir.</summary>
+    public void EnsureDeletable()
+    {
+        if (Status != InvoiceStatus.Cancelled) throw new InvalidInvoiceStateException("Yalnızca iptal edilmiş fatura silinebilir. Önce faturayı iptal edin.");
+    }
+
     private void Touch() => ConcurrencyStamp = Guid.NewGuid();
 }
 
