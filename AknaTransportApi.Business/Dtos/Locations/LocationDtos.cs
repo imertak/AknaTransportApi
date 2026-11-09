@@ -89,7 +89,9 @@ public sealed record ActiveJobLocationDto(
 public sealed record TrackingTokenDto(string Token, string? Url, DateTime ExpiresAt);
 
 /// <summary>Müşteri takip bağlantısı yanıtı: fiyat ve iç bilgiler içermez.</summary>
-public sealed record PublicTrackingDto(string JobNumber, JobStatus Status, string StoreName, DateOnly JobDate, string DeliveryAddress, LocationDto? Location, string? VehiclePlate = null);
+/// <remarks>DeliveryLatitude/DeliveryLongitude: son teslimat noktası (haritada hedef ve rota için); adres haritadan seçilmediyse boştur.</remarks>
+public sealed record PublicTrackingDto(string JobNumber, JobStatus Status, string StoreName, DateOnly JobDate, string DeliveryAddress, LocationDto? Location, string? VehiclePlate = null,
+    double? DeliveryLatitude = null, double? DeliveryLongitude = null);
 
 /// <summary>
 /// Gerçek zamanlı "iş değişti" ipucu. <see cref="DriverIds"/> işin şu anki ve (değiştiyse) önceki şoförüdür;
