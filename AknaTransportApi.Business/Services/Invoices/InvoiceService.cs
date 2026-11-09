@@ -24,19 +24,23 @@ public sealed class InvoiceService(
     TimeProvider clock,
     ILogger<InvoiceService> logger) : IInvoiceService
 {
+    public async Task<ListSummaryDto> SummaryAsync(InvoiceQuery query, CancellationToken ct)
+    {
+        var days = await ApplyFilters(invoices.QueryAsNoTracking(), query)
+            .GroupBy(i => i.InvoiceDate)
+            .Select(g => new
+            {
+                g.Key,
+                Count = g.Count(),
+                Total = g.Where(i => i.Status != InvoiceStatus.Cancelled).Sum(i => (decimal?)i.GrandTotal) ?? 0m,
+            })
+            .ToListAsync(ct);
+        return ListSummaryDto.FromDays(days.Select(d => (d.Key, d.Count, d.Total)));
+    }
+
     public async Task<PagedResult<InvoiceListItemDto>> ListAsync(InvoiceQuery query, CancellationToken ct)
     {
-        var q = invoices.QueryAsNoTracking();
-        if (query.CustomerId is { } customerId) q = q.Where(i => i.CustomerId == customerId);
-        if (query.Status is { } status) q = q.Where(i => i.Status == status);
-        if (query.StartDate is { } start) q = q.Where(i => i.InvoiceDate >= start);
-        if (query.EndDate is { } end) q = q.Where(i => i.InvoiceDate <= end);
-        if (query.Search.TrimOrNull() is { } search)
-        {
-            var s = search.ToLower();
-            q = q.Where(i => i.InvoiceNumber.ToLower().Contains(s) || (i.EArchiveInvoiceNumber != null && i.EArchiveInvoiceNumber.ToLower().Contains(s))
-                             || i.Customer!.CompanyName.ToLower().Contains(s));
-        }
+        var q = ApplyFilters(invoices.QueryAsNoTracking(), query);
 
         q = (query.SortBy?.ToLowerInvariant(), query.Descending) switch
         {
@@ -48,6 +52,21 @@ public sealed class InvoiceService(
             _ => q.OrderByDescending(i => i.InvoiceDate).ThenByDescending(i => i.CreatedAt),
         };
         return await q.Select(InvoiceMappings.ListProjection).ToPagedResultAsync(query, ct);
+    }
+
+    private static IQueryable<Invoice> ApplyFilters(IQueryable<Invoice> q, InvoiceQuery query)
+    {
+        if (query.CustomerId is { } customerId) q = q.Where(i => i.CustomerId == customerId);
+        if (query.Status is { Count: > 0 } statuses) q = q.Where(i => statuses.Contains(i.Status));
+        if (query.StartDate is { } start) q = q.Where(i => i.InvoiceDate >= start);
+        if (query.EndDate is { } end) q = q.Where(i => i.InvoiceDate <= end);
+        if (query.Search.TrimOrNull() is { } search)
+        {
+            var s = search.ToLower();
+            q = q.Where(i => i.InvoiceNumber.ToLower().Contains(s) || (i.EArchiveInvoiceNumber != null && i.EArchiveInvoiceNumber.ToLower().Contains(s))
+                             || i.Customer!.CompanyName.ToLower().Contains(s));
+        }
+        return q;
     }
 
     public async Task<InvoiceDetailDto> GetAsync(Guid id, CancellationToken ct)

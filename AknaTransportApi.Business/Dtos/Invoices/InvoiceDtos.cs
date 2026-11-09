@@ -141,7 +141,8 @@ public sealed class CancelInvoiceRequest
 public sealed class InvoiceQuery : PagedQuery
 {
     public Guid? CustomerId { get; set; }
-    public InvoiceStatus? Status { get; set; }
+    /// <summary>Birden fazla durum için ?status=Draft&amp;status=Pending</summary>
+    public List<InvoiceStatus>? Status { get; set; }
     public DateOnly? StartDate { get; set; }
     public DateOnly? EndDate { get; set; }
     public string? Search { get; set; }
