@@ -9,6 +9,8 @@ public interface INotificationService
     Task<int> MarkAllReadAsync(CancellationToken ct);
     Task RegisterDeviceAsync(RegisterPushDeviceRequest request, CancellationToken ct);
     Task UnregisterDeviceAsync(UnregisterPushDeviceRequest request, CancellationToken ct);
+    /// <summary>Kullanıcının kayıtlı tüm cihazlarına hemen bir deneme bildirimi gönderir ve sonucu döner.</summary>
+    Task<PushTestResultDto> SendTestAsync(CancellationToken ct);
 }
 
 /// <summary>Telefon bildirimi sağlayıcısı (Expo Push). Infrastructure katmanında uygulanır.</summary>

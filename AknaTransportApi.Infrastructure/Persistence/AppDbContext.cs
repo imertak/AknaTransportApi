@@ -29,6 +29,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider c
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<PushDevice> PushDevices => Set<PushDevice>();
+    public DbSet<CustomerTransaction> CustomerTransactions => Set<CustomerTransaction>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -26,5 +26,14 @@ public sealed record UnregisterPushDeviceRequest(string Token);
 /// <summary>Push sağlayıcısına gönderilecek tek mesaj.</summary>
 public sealed record PushMessage(string Token, string Title, string Body, IReadOnlyDictionary<string, string> Data, int? Badge);
 
-/// <summary>Gönderim sonucu: artık geçerli olmayan (uygulama silinmiş vb.) token'lar silinir.</summary>
-public sealed record PushSendResult(IReadOnlyList<string> InvalidTokens);
+/// <summary>
+/// Gönderim sonucu: artık geçerli olmayan (uygulama silinmiş vb.) token'lar silinir.
+/// Errors, sağlayıcının reddettiği her mesajı içerir (ör. InvalidCredentials: FCM/APNs anahtarı Expo'ya yüklenmemiş).
+/// </summary>
+public sealed record PushSendResult(IReadOnlyList<string> InvalidTokens, IReadOnlyList<PushTicketError>? Errors = null);
+
+/// <summary>Expo'nun tek bir mesaj için döndürdüğü hata (details.error ve message).</summary>
+public sealed record PushTicketError(string Token, string Error, string? Message);
+
+/// <summary>Test bildiriminin sonucu: sunucuda push açık mı, kaç cihaz kayıtlı, kaçına gitti ve hatalar.</summary>
+public sealed record PushTestResultDto(bool Enabled, int DeviceCount, int Delivered, IReadOnlyList<string> Errors);

@@ -88,6 +88,52 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
                     b.ToTable("customers", (string)null);
                 });
 
+            modelBuilder.Entity("AknaTransportApi.Domain.Entities.CustomerTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Method")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateOnly>("TransactionDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("CustomerId", "TransactionDate");
+
+                    b.ToTable("customer_transactions", (string)null);
+                });
+
             modelBuilder.Entity("AknaTransportApi.Domain.Entities.DriverVehicle", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1095,6 +1141,25 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
                             Name = "Diğer",
                             SortOrder = 90
                         });
+                });
+
+            modelBuilder.Entity("AknaTransportApi.Domain.Entities.CustomerTransaction", b =>
+                {
+                    b.HasOne("AknaTransportApi.Domain.Entities.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("AknaTransportApi.Domain.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Customer");
                 });
 
             modelBuilder.Entity("AknaTransportApi.Domain.Entities.DriverVehicle", b =>

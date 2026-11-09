@@ -110,3 +110,14 @@ public enum NotificationType
     /// <summary>İş tamamlandı (yöneticilere).</summary>
     JobCompleted = 8,
 }
+
+/// <summary>Müşteri cari hesabına elle girilen hareketin türü. Kesilen faturalar ayrıca otomatik borç yazar.</summary>
+public enum CustomerTransactionType
+{
+    /// <summary>Müşteriden gelen ödeme (tahsilat). Bakiyeyi düşürür.</summary>
+    Collection = 0,
+    /// <summary>Müşteriye giden ödeme (iade, fazla ödemenin geri verilmesi). Bakiyeyi artırır.</summary>
+    Refund = 1,
+    /// <summary>Faturasız borç kaydı (devir / açılış bakiyesi vb.). Bakiyeyi artırır.</summary>
+    Charge = 2,
+}

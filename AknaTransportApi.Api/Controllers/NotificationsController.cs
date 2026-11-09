@@ -43,6 +43,11 @@ public sealed class NotificationsController(INotificationService notifications) 
         return Done("Cihaz bildirimler için kaydedildi.");
     }
 
+    /// <summary>Kullanıcının kayıtlı telefonlarına hemen bir deneme bildirimi gönderir; sorunun nerede olduğunu söyler.</summary>
+    [HttpPost("test")]
+    public async Task<ActionResult<BaseResponse<PushTestResultDto>>> SendTest(CancellationToken ct) =>
+        Success(await notifications.SendTestAsync(ct));
+
     /// <summary>Çıkış yaparken telefonun token'ını siler; bu telefona artık bildirim gitmez.</summary>
     [HttpPost("devices/remove")]
     [AllowWhenPasswordChangeRequired]

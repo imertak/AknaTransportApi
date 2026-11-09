@@ -168,6 +168,39 @@ public class NotificationTests(AknaApiFactory factory) : IClassFixture<AknaApiFa
     }
 
     [Fact]
+    public void Expo_ticket_errors_are_reported_with_code_and_message()
+    {
+        var batch = new List<PushMessage>
+        {
+            new("ExponentPushToken[a]", "t", "b", new Dictionary<string, string>(), null),
+            new("ExponentPushToken[b]", "t", "b", new Dictionary<string, string>(), null),
+        };
+        const string body = """{"data":[{"status":"error","message":"no fcm","details":{"error":"InvalidCredentials"}},{"status":"ok","id":"2"}]}""";
+        var errors = ExpoPushNotificationSender.ReadTicketErrors(body, batch).ToList();
+        Assert.Equal([new PushTicketError("ExponentPushToken[a]", "InvalidCredentials", "no fcm")], errors);
+        Assert.Empty(ExpoPushNotificationSender.ReadInvalidTokens(body, batch));
+    }
+
+    [Fact]
+    public async Task Test_push_reports_missing_device_then_delivers_to_registered_phone()
+    {
+        var admin = await _client.AdminTokenAsync();
+        var driver = await _client.CreateDriverAsync(admin);
+
+        var none = await _client.OkAsync<PushTestResultDto>(HttpMethod.Post, "/api/notifications/test", new { }, driver.Token);
+        Assert.Equal(0, none.DeviceCount);
+        Assert.NotEmpty(none.Errors);
+
+        var token = ExpoToken();
+        await _client.OkAsync<object>(HttpMethod.Post, "/api/notifications/devices", new RegisterPushDeviceRequest(token, "android"), driver.Token);
+        var sent = await _client.OkAsync<PushTestResultDto>(HttpMethod.Post, "/api/notifications/test", new { }, driver.Token);
+        Assert.True(sent.Enabled);
+        Assert.Equal(1, sent.DeviceCount);
+        Assert.Equal(1, sent.Delivered);
+        Assert.Empty(sent.Errors);
+    }
+
+    [Fact]
     public async Task Tracking_link_points_to_built_in_page_which_is_served()
     {
         var admin = await _client.AdminTokenAsync();

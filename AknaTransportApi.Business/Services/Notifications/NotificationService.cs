@@ -7,6 +7,7 @@ public sealed class NotificationService(
     IRepository<PushDevice> devices,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
+    IPushNotificationSender pushSender,
     TimeProvider clock) : INotificationService
 {
     public async Task<PagedResult<NotificationDto>> ListMineAsync(NotificationQuery query, CancellationToken ct)
@@ -63,6 +64,44 @@ public sealed class NotificationService(
         var token = request.Token.Trim();
         await devices.Query().Where(d => d.Token == token && d.UserId == currentUser.UserId).ExecuteDeleteAsync(ct);
     }
+
+    public async Task<PushTestResultDto> SendTestAsync(CancellationToken ct)
+    {
+        var tokens = await devices.QueryAsNoTracking().Where(d => d.UserId == currentUser.UserId).Select(d => d.Token).ToListAsync(ct);
+        if (!pushSender.IsConfigured)
+            return new PushTestResultDto(false, tokens.Count, 0, ["Sunucuda telefon bildirimleri kapalı (Push__Enabled=false)."]);
+        if (tokens.Count == 0)
+            return new PushTestResultDto(true, 0, 0, ["Bu hesaba kayıtlı telefon yok. Uygulama bildirim iznini alamamış veya push token'ı oluşturamamış olabilir."]);
+
+        var data = new Dictionary<string, string> { ["type"] = "Test" };
+        PushSendResult result;
+        try
+        {
+            result = await pushSender.SendAsync(tokens.Select(t => new PushMessage(t, "Test bildirimi", "Bildirimler bu telefona ulaşıyor.", data, null)).ToList(), ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            return new PushTestResultDto(true, tokens.Count, 0, [$"Expo'ya ulaşılamadı: {ex.Message}"]);
+        }
+
+        if (result.InvalidTokens.Count > 0)
+        {
+            var invalid = result.InvalidTokens.ToList();
+            await devices.Query().Where(d => invalid.Contains(d.Token)).ExecuteDeleteAsync(ct);
+        }
+        var errors = (result.Errors ?? []).Select(e => DescribeError(e.Error, e.Message)).Distinct().ToList();
+        var failed = (result.Errors ?? []).Select(e => e.Token).Distinct().Count();
+        return new PushTestResultDto(true, tokens.Count, tokens.Count - failed, errors);
+    }
+
+    /// <summary>Expo hata kodlarını yöneticinin ne yapacağını söyleyen açıklamaya çevirir.</summary>
+    private static string DescribeError(string code, string? message) => code switch
+    {
+        "InvalidCredentials" => "Expo'da FCM (Android) veya APNs (iPhone) anahtarı tanımlı değil. EAS'e push kimlik bilgilerini yükleyin.",
+        "DeviceNotRegistered" => "Telefon kaydı geçersiz (uygulama silinmiş veya yeniden kurulmuş). Uygulamayı açınca yeniden kaydolur.",
+        "MessageRateExceeded" => "Bu telefona çok sık bildirim gönderildi, biraz sonra tekrar deneyin.",
+        _ => string.IsNullOrWhiteSpace(message) ? code : $"{code}: {message}",
+    };
 
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
 }

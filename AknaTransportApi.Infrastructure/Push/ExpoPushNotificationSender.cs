@@ -38,6 +38,7 @@ public sealed class ExpoPushNotificationSender(HttpClient http, IOptions<PushOpt
     public async Task<PushSendResult> SendAsync(IReadOnlyList<PushMessage> messages, CancellationToken ct)
     {
         var invalid = new List<string>();
+        var errors = new List<PushTicketError>();
         foreach (var batch in messages.Chunk(MaxBatch))
         {
             var payload = batch.Select(m => new ExpoMessage(m.Token, m.Title, m.Body, m.Data, "default", m.Badge, _options.AndroidChannelId, "high")).ToList();
@@ -53,14 +54,23 @@ public sealed class ExpoPushNotificationSender(HttpClient http, IOptions<PushOpt
             if (!response.IsSuccessStatusCode)
                 throw new InvalidOperationException($"Expo push isteği başarısız ({(int)response.StatusCode}): {Truncate(body, 500)}");
 
-            invalid.AddRange(ReadInvalidTokens(body, batch));
+            var batchErrors = ReadTicketErrors(body, batch).ToList();
+            errors.AddRange(batchErrors);
+            invalid.AddRange(batchErrors.Where(e => e.Error == "DeviceNotRegistered").Select(e => e.Token));
         }
-        logger.LogInformation("Push bildirimi gönderildi. Cihaz: {Count}, Geçersiz: {Invalid}", messages.Count, invalid.Count);
-        return new PushSendResult(invalid);
+        // InvalidCredentials vb. hatalar bildirimin telefona hiç gitmediği anlamına gelir; günlükte görünmeli.
+        foreach (var e in errors.Where(e => e.Error != "DeviceNotRegistered"))
+            logger.LogWarning("Expo push hatası: {Error} - {Message} (token: {Token})", e.Error, e.Message, Mask(e.Token));
+        logger.LogInformation("Push bildirimi gönderildi. Cihaz: {Count}, Hatalı: {Errors}, Geçersiz: {Invalid}", messages.Count, errors.Count, invalid.Count);
+        return new PushSendResult(invalid, errors);
     }
 
     /// <summary>Yanıttaki her bilet (ticket) mesajlarla aynı sıradadır; DeviceNotRegistered olan token'lar geçersizdir.</summary>
-    public static IEnumerable<string> ReadInvalidTokens(string body, IReadOnlyList<PushMessage> batch)
+    public static IEnumerable<string> ReadInvalidTokens(string body, IReadOnlyList<PushMessage> batch) =>
+        ReadTicketErrors(body, batch).Where(e => e.Error == "DeviceNotRegistered").Select(e => e.Token);
+
+    /// <summary>Yanıttaki status=error biletlerini mesajın token'ıyla eşleştirerek döner.</summary>
+    public static IEnumerable<PushTicketError> ReadTicketErrors(string body, IReadOnlyList<PushMessage> batch)
     {
         JsonElement data;
         try
@@ -77,12 +87,17 @@ public sealed class ExpoPushNotificationSender(HttpClient http, IOptions<PushOpt
         {
             if (i >= batch.Count) yield break;
             var token = batch[i++].Token;
-            if (ticket.TryGetProperty("status", out var status) && status.GetString() == "error"
-                && ticket.TryGetProperty("details", out var details) && details.ValueKind == JsonValueKind.Object
-                && details.TryGetProperty("error", out var error) && error.GetString() == "DeviceNotRegistered")
-                yield return token;
+            if (!ticket.TryGetProperty("status", out var status) || status.GetString() != "error") continue;
+            string? code = null;
+            if (ticket.TryGetProperty("details", out var details) && details.ValueKind == JsonValueKind.Object
+                && details.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.String)
+                code = error.GetString();
+            var message = ticket.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString() : null;
+            yield return new PushTicketError(token, code ?? "Unknown", message);
         }
     }
+
+    private static string Mask(string token) => token.Length <= 24 ? token : token[..24] + "…";
 
     private static string Truncate(string value, int max) => value.Length <= max ? value : value[..max];
 

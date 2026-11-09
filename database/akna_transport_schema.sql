@@ -1061,3 +1061,50 @@ BEGIN
     END IF;
 END $EF$;
 COMMIT;
+
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261109090000_AddCustomerTransactions') THEN
+    CREATE TABLE customer_transactions (
+        "Id" uuid NOT NULL,
+        "CustomerId" uuid NOT NULL,
+        "Type" character varying(20) NOT NULL,
+        "Amount" numeric(18,2) NOT NULL,
+        "TransactionDate" date NOT NULL,
+        "Method" character varying(40),
+        "Description" character varying(500),
+        "CreatedByUserId" uuid NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_customer_transactions" PRIMARY KEY ("Id"),
+        CONSTRAINT "FK_customer_transactions_customers_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES customers ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_customer_transactions_users_CreatedByUserId" FOREIGN KEY ("CreatedByUserId") REFERENCES users ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261109090000_AddCustomerTransactions') THEN
+    CREATE INDEX "IX_customer_transactions_CreatedByUserId" ON customer_transactions ("CreatedByUserId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261109090000_AddCustomerTransactions') THEN
+    CREATE INDEX "IX_customer_transactions_CustomerId_TransactionDate" ON customer_transactions ("CustomerId", "TransactionDate");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261109090000_AddCustomerTransactions') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261109090000_AddCustomerTransactions', '9.0.10');
+    END IF;
+END $EF$;
+COMMIT;
