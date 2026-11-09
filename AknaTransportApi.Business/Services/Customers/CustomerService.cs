@@ -7,6 +7,7 @@ public sealed class CustomerService(
     IRepository<TransportJob> jobs,
     IRepository<Invoice> invoices,
     IRepository<TransportJobStop> stops,
+    IRepository<CustomerTransaction> transactions,
     IUnitOfWork unitOfWork) : ICustomerService
 {
     public async Task<PagedResult<CustomerDto>> ListAsync(CustomerQuery query, CancellationToken ct)
@@ -65,7 +66,8 @@ public sealed class CustomerService(
         var customer = await customers.GetByIdAsync(id, ct) ?? throw NotFoundException.For("Müşteri");
         // Silinmiş (mantıksal) işler de geçmiş sayılır; müşteri kaydı bu işlere bağlı kalır.
         var hasHistory = await jobs.QueryAsNoTracking().IgnoreQueryFilters().AnyAsync(j => j.CustomerId == id, ct)
-                         || await invoices.QueryAsNoTracking().AnyAsync(i => i.CustomerId == id, ct);
+                         || await invoices.QueryAsNoTracking().AnyAsync(i => i.CustomerId == id, ct)
+                         || await transactions.QueryAsNoTracking().AnyAsync(t => t.CustomerId == id, ct);
 
         if (hasHistory)
         {

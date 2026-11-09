@@ -74,3 +74,70 @@ public sealed class CustomerAddressQuery
     public string? Search { get; set; }
     public int Limit { get; set; } = 30;
 }
+
+/// <summary>Cari hesaba elle girilen hareket: tahsilat (gelen), iade (giden) veya faturasız borç kaydı.</summary>
+public sealed record CustomerTransactionRequest(CustomerTransactionType Type, decimal Amount, DateOnly Date, string? Method, string? Description);
+
+public sealed record CustomerTransactionDto(
+    Guid Id,
+    Guid CustomerId,
+    CustomerTransactionType Type,
+    decimal Amount,
+    DateOnly Date,
+    string? Method,
+    string? Description,
+    string? CreatedByName,
+    DateTime CreatedAt);
+
+/// <summary>
+/// Müşterinin cari durumu. Balance = kesilen faturalar (ödenecek tutar) + borç kayıtları + iadeler − tahsilatlar.
+/// Pozitif bakiye müşterinin borcu, negatif bakiye müşterinin alacağıdır (fazla ödeme).
+/// </summary>
+public sealed record CustomerBalanceDto(
+    Guid CustomerId,
+    string CompanyName,
+    bool IsActive,
+    decimal Invoiced,
+    int InvoiceCount,
+    decimal Charged,
+    decimal Collected,
+    decimal Refunded,
+    decimal Balance,
+    DateOnly? LastMovementDate);
+
+public sealed record CustomerBalanceTotalsDto(decimal Invoiced, decimal Charged, decimal Collected, decimal Refunded, decimal Balance, int CustomersWithBalance);
+
+public sealed record CustomerBalanceOverviewDto(CustomerBalanceTotalsDto Totals, IReadOnlyList<CustomerBalanceDto> Items);
+
+public sealed class CustomerBalanceQuery
+{
+    public string? Search { get; set; }
+    /// <summary>true ise yalnızca bakiyesi sıfır olmayan müşteriler.</summary>
+    public bool OpenOnly { get; set; }
+}
+
+/// <summary>Cari hesap ekstresindeki satır türü.</summary>
+public enum LedgerEntryKind
+{
+    Invoice = 0,
+    Collection = 1,
+    Refund = 2,
+    Charge = 3,
+}
+
+/// <summary>Ekstre satırı. Debit bakiyeyi artırır (borç), Credit düşürür (alacak). Balance, satırdan sonraki bakiyedir.</summary>
+public sealed record LedgerEntryDto(
+    LedgerEntryKind Kind,
+    Guid Id,
+    DateOnly Date,
+    string Title,
+    string? Description,
+    decimal Debit,
+    decimal Credit,
+    decimal Balance,
+    Guid? InvoiceId,
+    Guid? TransactionId,
+    string? Method,
+    DateTime CreatedAt);
+
+public sealed record CustomerLedgerDto(CustomerBalanceDto Balance, IReadOnlyList<LedgerEntryDto> Entries);
