@@ -7,6 +7,8 @@ namespace AknaTransportApi.Business.Interfaces.Services;
 public interface IInvoiceService
 {
     Task<PagedResult<InvoiceListItemDto>> ListAsync(InvoiceQuery query, CancellationToken ct);
+    /// <summary>Liste filtresine uyan faturaların adedi, tutarı (iptaller hariç) ve ay ay dağılımı.</summary>
+    Task<ListSummaryDto> SummaryAsync(InvoiceQuery query, CancellationToken ct);
     Task<InvoiceDetailDto> GetAsync(Guid id, CancellationToken ct);
     Task<IReadOnlyList<JobDto>> GetJobsAsync(Guid id, CancellationToken ct);
     Task<InvoiceDetailDto> CreateAsync(CreateInvoiceRequest request, CancellationToken ct);

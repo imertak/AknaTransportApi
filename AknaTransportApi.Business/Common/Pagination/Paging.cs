@@ -40,3 +40,23 @@ public static class PagingExtensions
         return new PagedResult<T> { Items = items, PageNumber = paging.PageNumber, PageSize = paging.PageSize, TotalCount = total };
     }
 }
+
+/// <summary>Bir ayın liste özeti (iptal edilenler tutara katılmaz, adede katılır).</summary>
+public sealed record MonthTotalDto(int Year, int Month, int Count, decimal Total);
+
+/// <summary>
+/// Sayfalı listenin filtreye uyan tüm kayıtları için özet: toplam adet, tutar ve ay ay dağılım. Uygulama
+/// listeyi sayfa sayfa çekerken başlıklardaki adet ve tutarları buradan gösterir.
+/// </summary>
+public sealed record ListSummaryDto(int Count, decimal Total, IReadOnlyList<MonthTotalDto> Months)
+{
+    public static ListSummaryDto FromDays(IEnumerable<(DateOnly Date, int Count, decimal Total)> days)
+    {
+        var months = days
+            .GroupBy(d => (d.Date.Year, d.Date.Month))
+            .Select(g => new MonthTotalDto(g.Key.Year, g.Key.Month, g.Sum(x => x.Count), g.Sum(x => x.Total)))
+            .OrderByDescending(m => m.Year).ThenByDescending(m => m.Month)
+            .ToList();
+        return new ListSummaryDto(months.Sum(m => m.Count), months.Sum(m => m.Total), months);
+    }
+}

@@ -253,4 +253,29 @@ public class JobTests(AknaApiFactory factory) : IClassFixture<AknaApiFactory>
         Assert.Contains(body!.Errors, e => e.Field == "price");
         Assert.DoesNotContain(body.Errors, e => e.Field == "storeName");
     }
+
+    [Fact]
+    public async Task Summary_counts_and_totals_filtered_jobs_by_month_and_search_matches_customer_name()
+    {
+        var admin = await _client.AdminTokenAsync();
+        var customer = await _client.CreateCustomerAsync(admin);
+        await _client.CreateJobAsync(admin, customer.Id, date: new DateOnly(2026, 10, 3), price: 4000m);
+        var cancelled = await _client.CreateJobAsync(admin, customer.Id, date: new DateOnly(2026, 10, 20), price: 1000m);
+        await _client.CreateJobAsync(admin, customer.Id, date: new DateOnly(2026, 11, 5), price: 2500m);
+        await _client.OkAsync<JobDetailDto>(HttpMethod.Patch, $"/api/jobs/{cancelled.Job.Id}/cancel", new CancelJobRequest { Reason = "Test" }, admin);
+
+        var summary = await _client.OkAsync<ListSummaryDto>(HttpMethod.Get, $"/api/jobs/summary?customerId={customer.Id}", null, admin);
+        Assert.Equal(3, summary.Count);
+        Assert.Equal(6500m, summary.Total); // iptal edilen iş tutara katılmaz
+        Assert.Collection(summary.Months,
+            m => Assert.Equal((2026, 11, 1, 2500m), (m.Year, m.Month, m.Count, m.Total)),
+            m => Assert.Equal((2026, 10, 2, 4000m), (m.Year, m.Month, m.Count, m.Total)));
+
+        // Arama müşteri adında da eşleşir.
+        var namePart = customer.CompanyName[^8..];
+        var page = await _client.OkAsync<PagedResult<JobDto>>(HttpMethod.Get, $"/api/jobs?search={namePart}&pageSize=2", null, admin);
+        Assert.Equal(3, page.TotalCount);
+        Assert.Equal(2, page.Items.Count);
+        Assert.Equal(new DateOnly(2026, 11, 5), page.Items[0].JobDate); // yeniden eskiye
+    }
 }

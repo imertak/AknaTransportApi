@@ -31,6 +31,27 @@ public sealed class JobService(
         return await Sort(ApplyFilters(q, query), query).Select(JobMappings.Projection).ToPagedResultAsync(query, ct);
     }
 
+    public async Task<ListSummaryDto> SummaryAsync(JobQuery query, CancellationToken ct)
+    {
+        var q = jobs.QueryAsNoTracking();
+        if (!currentUser.IsAdmin)
+        {
+            q = q.Where(j => j.AssignedDriverId == currentUser.UserId);
+            query.DriverId = null;
+        }
+        // Gün gün toplanır, aylara bellekte bölünür (tarih parçalarının SQL çevirisine bağlı kalmamak için).
+        var days = await ApplyFilters(q, query)
+            .GroupBy(j => j.JobDate)
+            .Select(g => new
+            {
+                g.Key,
+                Count = g.Count(),
+                Total = g.Where(j => j.Status != JobStatus.Cancelled).Sum(j => (decimal?)j.Price) ?? 0m,
+            })
+            .ToListAsync(ct);
+        return ListSummaryDto.FromDays(days.Select(d => (d.Key, d.Count, d.Total)));
+    }
+
     public async Task<PagedResult<JobDto>> ListMyJobsAsync(JobQuery query, CancellationToken ct)
     {
         var q = jobs.QueryAsNoTracking().Where(j => j.AssignedDriverId == currentUser.UserId);
@@ -288,7 +309,10 @@ public sealed class JobService(
         {
             var s = search.ToLower();
             q = q.Where(j => j.JobNumber.ToLower().Contains(s) || j.StoreName.ToLower().Contains(s) || j.Description.ToLower().Contains(s)
-                             || j.RouteDescription.ToLower().Contains(s) || j.Stops.Any(st => st.Address.ToLower().Contains(s)));
+                             || j.RouteDescription.ToLower().Contains(s) || j.Stops.Any(st => st.Address.ToLower().Contains(s))
+                             || j.Customer!.CompanyName.ToLower().Contains(s)
+                             || (j.AssignedDriver != null && j.AssignedDriver.FullName.ToLower().Contains(s))
+                             || (j.AssignedVehicle != null && j.AssignedVehicle.PlateNumber.ToLower().Contains(s)));
         }
         if (query.Uninvoiced is { } uninvoiced) q = uninvoiced ? q.Where(j => j.InvoiceId == null) : q.Where(j => j.InvoiceId != null);
         q = query.BillingStatus switch

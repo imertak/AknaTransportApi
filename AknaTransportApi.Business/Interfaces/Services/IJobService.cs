@@ -6,6 +6,8 @@ namespace AknaTransportApi.Business.Interfaces.Services;
 public interface IJobService
 {
     Task<PagedResult<JobDto>> ListAsync(JobQuery query, CancellationToken ct);
+    /// <summary>Liste filtresine uyan işlerin adedi, tutarı (iptaller hariç) ve ay ay dağılımı.</summary>
+    Task<ListSummaryDto> SummaryAsync(JobQuery query, CancellationToken ct);
     Task<PagedResult<JobDto>> ListMyJobsAsync(JobQuery query, CancellationToken ct);
     Task<JobDetailDto> GetAsync(Guid id, CancellationToken ct);
     /// <summary>includeDeleted yalnızca yönetici için geçerlidir; silinmiş işin detayını ve geçmişini döndürür.</summary>

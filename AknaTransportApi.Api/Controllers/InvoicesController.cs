@@ -15,6 +15,11 @@ public sealed class InvoicesController(IInvoiceService invoiceService) : ApiCont
     public async Task<ActionResult<BaseResponse<PagedResult<InvoiceListItemDto>>>> List([FromQuery] InvoiceQuery query, CancellationToken ct) =>
         Success(await invoiceService.ListAsync(query, ct));
 
+    /// <summary>Liste filtresine uyan faturaların özeti (adet, tutar, ay ay).</summary>
+    [HttpGet("summary")]
+    public async Task<ActionResult<BaseResponse<ListSummaryDto>>> Summary([FromQuery] InvoiceQuery query, CancellationToken ct) =>
+        Success(await invoiceService.SummaryAsync(query, ct));
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<BaseResponse<InvoiceDetailDto>>> Get(Guid id, CancellationToken ct) =>
         Success(await invoiceService.GetAsync(id, ct));

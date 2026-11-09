@@ -17,6 +17,11 @@ public sealed class JobsController(IJobService jobService, ILocationService loca
         Success(await jobService.ListAsync(query, ct));
 
     /// <summary>Oturumdaki kullanıcıya atanmış işler (yönetici için de kendi işleri).</summary>
+    /// <summary>Liste filtresine uyan işlerin özeti (adet, tutar, ay ay). Uygulama listeyi sayfa sayfa çekerken kullanır.</summary>
+    [HttpGet("summary")]
+    public async Task<ActionResult<BaseResponse<ListSummaryDto>>> Summary([FromQuery] JobQuery query, CancellationToken ct) =>
+        Success(await jobService.SummaryAsync(query, ct));
+
     [HttpGet("my-jobs")]
     public async Task<ActionResult<BaseResponse<PagedResult<JobDto>>>> MyJobs([FromQuery] JobQuery query, CancellationToken ct) =>
         Success(await jobService.ListMyJobsAsync(query, ct));
