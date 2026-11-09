@@ -94,6 +94,15 @@ public sealed class InvoicesController(IInvoiceService invoiceService) : ApiCont
     public async Task<ActionResult<BaseResponse<InvoiceDetailDto>>> Cancel(Guid id, [FromBody] CancelInvoiceRequest? request, CancellationToken ct) =>
         Success(await invoiceService.CancelAsync(id, request ?? new(), ct), "Fatura iptal edildi.");
 
+    /// <summary>İptal edilmiş faturayı kalıcı olarak siler (kalemler, e-posta kayıtları ve PDF dahil). Diğer durumlarda 409.</summary>
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(typeof(BaseResponse), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<BaseResponse>> Delete(Guid id, CancellationToken ct)
+    {
+        await invoiceService.DeleteAsync(id, ct);
+        return Done("Fatura silindi.");
+    }
+
     /// <summary>Başarısız olmuş fatura e-postasını yeniden kuyruğa alır. Gönderilmiş e-posta tekrar gönderilmez.</summary>
     [HttpPost("{id:guid}/resend-email")]
     public async Task<ActionResult<BaseResponse<InvoiceDetailDto>>> ResendEmail(Guid id, CancellationToken ct) =>
