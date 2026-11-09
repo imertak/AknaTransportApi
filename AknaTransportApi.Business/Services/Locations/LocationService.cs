@@ -245,13 +245,13 @@ public sealed class LocationService(
                          join j in jobs.QueryAsNoTracking() on t.JobId equals j.Id
                          join l in latestLocations.QueryAsNoTracking() on j.Id equals l.JobId into lj
                          from l in lj.DefaultIfEmpty()
-                         select new { j.JobNumber, j.Status, j.StoreName, j.JobDate, j.DeliveryAddress, Plate = j.AssignedVehicle != null ? j.AssignedVehicle.PlateNumber : null, Location = l })
+                         select new { j.JobNumber, j.Status, j.StoreName, j.JobDate, j.DeliveryAddress, j.DeliveryLatitude, j.DeliveryLongitude, Plate = j.AssignedVehicle != null ? j.AssignedVehicle.PlateNumber : null, Location = l })
                         .FirstOrDefaultAsync(ct)
                   ?? throw new NotFoundException("Takip bağlantısı geçersiz veya süresi dolmuş.");
 
         // Konum yalnızca araç hareket halindeyken paylaşılır.
         var location = row.Location is not null && trackable.Contains(row.Status) ? ToDto(row.Location) : null;
-        return new PublicTrackingDto(row.JobNumber, row.Status, row.StoreName, row.JobDate, row.DeliveryAddress, location, row.Plate);
+        return new PublicTrackingDto(row.JobNumber, row.Status, row.StoreName, row.JobDate, row.DeliveryAddress, location, row.Plate, row.DeliveryLatitude, row.DeliveryLongitude);
     }
 
     public async Task<int> PurgeExpiredHistoryAsync(CancellationToken ct)

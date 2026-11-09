@@ -20,7 +20,7 @@
   var token = new URLSearchParams(location.search).get('t') || decodeURIComponent((location.hash || '').replace(/^#/, '')) || '';
   var el = function (id) { return document.getElementById(id); };
   var timer = null;
-  var map = null;        // { setVehicle(pos, heading, plate), clearVehicle() }
+  var map = null;        // { setVehicle, clearVehicle, setDestination, setRoute, frame }
   var mapFailed = false;
 
   // Uygulamadaki harita ile aynı görünüm: MapLibre + OpenFreeMap vektör karoları ve uygulamanın teması
@@ -44,6 +44,15 @@
     label.hidden = !plate;
   }
 
+  function destinationElement() {
+    var node = document.createElement('div');
+    node.className = 'dest';
+    node.setAttribute('aria-label', 'Teslimat noktası');
+    return node;
+  }
+
+  var EMPTY_LINE = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } };
+
   function createMapLibre() {
     var gl = new maplibregl.Map({
       container: 'map',
@@ -56,24 +65,53 @@
     });
     gl.touchZoomRotate.disableRotation();
     gl.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
-    var marker = null, node = null, centered = false, loaded = false;
-    gl.on('load', function () { loaded = true; });
-    gl.on('error', function (e) {
+    var marker = null, node = null, dest = null, loaded = false, pendingRoute = null;
+    var toLngLat = function (p) { return [p[1], p[0]]; };
+    function applyRoute(coords, straight) {
+      var line = function (c) { return { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: c ? c.map(toLngLat) : [] } }; };
+      gl.getSource('route').setData(line(straight ? null : coords));
+      gl.getSource('route-straight').setData(line(straight ? coords : null));
+    }
+    gl.on('load', function () {
+      loaded = true;
+      // Rota: beyaz kenarlıklı koyu çizgi; gerçek yol bulunamazsa kesikli düz çizgi.
+      gl.addSource('route', { type: 'geojson', data: EMPTY_LINE });
+      gl.addSource('route-straight', { type: 'geojson', data: EMPTY_LINE });
+      var round = { 'line-cap': 'round', 'line-join': 'round' };
+      gl.addLayer({ id: 'route-casing', type: 'line', source: 'route', layout: round, paint: { 'line-color': '#FFFFFF', 'line-width': 9 } });
+      gl.addLayer({ id: 'route-line', type: 'line', source: 'route', layout: round, paint: { 'line-color': '#1A1A1A', 'line-width': 4.5 } });
+      gl.addLayer({ id: 'route-straight', type: 'line', source: 'route-straight', layout: { 'line-cap': 'round' }, paint: { 'line-color': '#1A1A1A', 'line-width': 3, 'line-dasharray': [1.5, 2] } });
+      if (pendingRoute) { applyRoute(pendingRoute.coords, pendingRoute.straight); pendingRoute = null; }
+    });
+    gl.on('error', function () {
       // Stil (veya karo kaynağı) hiç yüklenemediyse yedek haritaya geç; tek tük karo hataları yok sayılır.
       if (!loaded && !mapFailed) { mapFailed = true; gl.remove(); switchToFallback(); }
     });
     return {
       setVehicle: function (pos, heading, plate) {
-        var lngLat = [pos[1], pos[0]];
         if (!marker) {
           node = vehicleElement();
-          marker = new maplibregl.Marker({ element: node, anchor: 'top', offset: [0, -21] }).setLngLat(lngLat).addTo(gl);
-        } else marker.setLngLat(lngLat);
+          marker = new maplibregl.Marker({ element: node, anchor: 'top', offset: [0, -21] }).setLngLat(toLngLat(pos)).addTo(gl);
+        } else marker.setLngLat(toLngLat(pos));
         updateVehicleElement(node, heading, plate);
-        if (!centered) { gl.jumpTo({ center: lngLat, zoom: 14 }); centered = true; }
       },
       clearVehicle: function () {
-        if (marker) { marker.remove(); marker = null; node = null; centered = false; }
+        if (marker) { marker.remove(); marker = null; node = null; }
+      },
+      setDestination: function (pos) {
+        if (!pos) { if (dest) { dest.remove(); dest = null; } return; }
+        if (!dest) dest = new maplibregl.Marker({ element: destinationElement(), anchor: 'center' }).setLngLat(toLngLat(pos)).addTo(gl);
+        else dest.setLngLat(toLngLat(pos));
+      },
+      setRoute: function (coords, straight) {
+        if (loaded) applyRoute(coords, straight);
+        else pendingRoute = { coords: coords, straight: straight };
+      },
+      frame: function (points) {
+        if (points.length === 1) { gl.jumpTo({ center: toLngLat(points[0]), zoom: 14 }); return; }
+        var b = new maplibregl.LngLatBounds();
+        points.forEach(function (p) { b.extend(toLngLat(p)); });
+        gl.fitBounds(b, { padding: { top: 70, bottom: 50, left: 50, right: 50 }, maxZoom: 15, duration: 0 });
       }
     };
   }
@@ -97,26 +135,108 @@
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
       }).addTo(lf);
     });
-    var marker = null, node = null, centered = false;
+    var marker = null, node = null, dest = null, routeLayers = [];
     return {
       setVehicle: function (pos, heading, plate) {
         if (!marker) {
           node = vehicleElement();
-          marker = L.marker(pos, { icon: L.divIcon({ className: '', html: node, iconSize: [96, 64], iconAnchor: [48, 21] }) }).addTo(lf);
+          marker = L.marker(pos, { icon: L.divIcon({ className: '', html: node, iconSize: [96, 64], iconAnchor: [48, 21] }), zIndexOffset: 1000 }).addTo(lf);
         } else marker.setLatLng(pos);
         updateVehicleElement(node, heading, plate);
-        if (!centered) { lf.setView(pos, 14); centered = true; }
       },
       clearVehicle: function () {
-        if (marker) { lf.removeLayer(marker); marker = null; node = null; centered = false; }
+        if (marker) { lf.removeLayer(marker); marker = null; node = null; }
+      },
+      setDestination: function (pos) {
+        if (!pos) { if (dest) { lf.removeLayer(dest); dest = null; } return; }
+        if (!dest) dest = L.marker(pos, { icon: L.divIcon({ className: '', html: destinationElement(), iconSize: [26, 26], iconAnchor: [13, 13] }) }).addTo(lf);
+        else dest.setLatLng(pos);
+      },
+      setRoute: function (coords, straight) {
+        routeLayers.forEach(function (l) { lf.removeLayer(l); });
+        routeLayers = [];
+        if (!coords || coords.length < 2) return;
+        if (straight) {
+          routeLayers.push(L.polyline(coords, { color: '#1A1A1A', weight: 3, dashArray: '4 8', lineCap: 'round' }).addTo(lf));
+        } else {
+          routeLayers.push(L.polyline(coords, { color: '#FFFFFF', weight: 9, lineCap: 'round', lineJoin: 'round' }).addTo(lf));
+          routeLayers.push(L.polyline(coords, { color: '#1A1A1A', weight: 4.5, lineCap: 'round', lineJoin: 'round' }).addTo(lf));
+        }
+      },
+      frame: function (points) {
+        if (points.length === 1) lf.setView(points[0], 14);
+        else lf.fitBounds(points, { paddingTopLeft: [50, 70], paddingBottomRight: [50, 50], maxZoom: 15 });
       }
     };
   }
 
-  var lastVehicle = null;
+  // Son bilinen durum: harita yedeğe geçerse veya rota sonradan gelirse yeniden çizilir.
+  var state = { vehicle: null, dest: null, route: null, framed: '' };
+
+  // Yol rotası: OSRM uyumlu servis (uygulamadaki ile aynı). Araç 150 m'den fazla yer değiştirmedikçe yeniden
+  // istenmez; servis yanıt vermezse araçtan hedefe kesikli düz çizgi gösterilir.
+  var ROUTING_URL = 'https://router.project-osrm.org';
+  var REROUTE_METERS = 150;
+  var routeRequest = { from: null, to: null, busy: false };
+
+  function meters(a, b) {
+    var r = Math.PI / 180, dLat = (b[0] - a[0]) * r, dLng = (b[1] - a[1]) * r;
+    var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  }
+
+  function drawRoute() {
+    if (!map) return;
+    var v = state.vehicle && state.vehicle.pos, d = state.dest;
+    if (!v || !d) { map.setRoute(null, false); return; }
+    if (state.route) map.setRoute([v].concat(state.route), false);
+    else map.setRoute([v, d], true);
+  }
+
+  function refreshRoute() {
+    var v = state.vehicle && state.vehicle.pos, d = state.dest;
+    if (!v || !d) { state.route = null; drawRoute(); return; }
+    var sameTarget = !!routeRequest.to && routeRequest.to[0] === d[0] && routeRequest.to[1] === d[1];
+    if (!sameTarget) state.route = null;
+    var fresh = sameTarget && !!routeRequest.from && meters(routeRequest.from, v) < REROUTE_METERS;
+    drawRoute();
+    if (fresh || routeRequest.busy || typeof fetch !== 'function') return;
+    routeRequest = { from: v, to: d, busy: true };
+    var url = ROUTING_URL + '/route/v1/driving/' + v[1] + ',' + v[0] + ';' + d[1] + ',' + d[0] + '?overview=full&geometries=geojson&steps=false';
+    fetch(url, { headers: { Accept: 'application/json' } })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (body) {
+        var c = body && body.code === 'Ok' && body.routes && body.routes[0] && body.routes[0].geometry && body.routes[0].geometry.coordinates;
+        state.route = c && c.length > 1 ? c.map(function (p) { return [p[1], p[0]]; }) : null;
+      })
+      .catch(function () { state.route = null; })
+      .then(function () { routeRequest.busy = false; drawRoute(); });
+  }
+
+  /** Harita ilk kez (veya araç/hedef görünürlüğü değişince) araç ve hedefi birlikte gösterecek şekilde konumlanır. */
+  function frameMap() {
+    if (!map) return;
+    var points = [];
+    if (state.vehicle) points.push(state.vehicle.pos);
+    if (state.dest) points.push(state.dest);
+    var key = (state.vehicle ? 'v' : '') + (state.dest ? 'd' : '');
+    if (!points.length || key === state.framed) return;
+    state.framed = key;
+    map.frame(points);
+  }
+
+  function redraw() {
+    if (!map) return;
+    if (state.vehicle) map.setVehicle(state.vehicle.pos, state.vehicle.heading, state.vehicle.plate);
+    else map.clearVehicle();
+    map.setDestination(state.dest);
+    drawRoute();
+    frameMap();
+  }
 
   function switchToFallback() {
     map = null;
+    state.framed = '';
     el('map').innerHTML = '';
     var css = document.createElement('link');
     css.rel = 'stylesheet';
@@ -126,7 +246,7 @@
     js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
     js.onload = function () {
       map = createLeaflet();
-      if (lastVehicle) map.setVehicle(lastVehicle.pos, lastVehicle.heading, lastVehicle.plate);
+      redraw();
     };
     document.head.appendChild(js);
   }
@@ -181,18 +301,19 @@
     el('details').hidden = false;
 
     var loc = data.location;
+    var closed = status === 'Completed' || status === 'Cancelled';
+    state.dest = !closed && typeof data.deliveryLatitude === 'number' && typeof data.deliveryLongitude === 'number'
+      ? [data.deliveryLatitude, data.deliveryLongitude] : null;
+    state.vehicle = loc ? { pos: [loc.latitude, loc.longitude], heading: loc.heading, plate: data.vehiclePlate || '' } : null;
+    if (state.vehicle || state.dest) initMap();
+    redraw();
+    refreshRoute();
     if (loc) {
-      var pos = [loc.latitude, loc.longitude];
-      lastVehicle = { pos: pos, heading: loc.heading, plate: data.vehiclePlate || '' };
-      initMap();
-      if (map) map.setVehicle(pos, loc.heading, data.vehiclePlate || '');
       el('updated').textContent = formatAgo(loc.recordedAt);
       el('message').textContent = 'Aracın konumu haritada canlı olarak gösterilir.';
       el('open-maps').href = 'https://www.google.com/maps/search/?api=1&query=' + loc.latitude + ',' + loc.longitude;
       el('open-maps').hidden = false;
     } else {
-      lastVehicle = null;
-      if (map) map.clearVehicle();
       el('updated').textContent = '';
       el('open-maps').hidden = true;
       el('message').textContent = status === 'Completed'
