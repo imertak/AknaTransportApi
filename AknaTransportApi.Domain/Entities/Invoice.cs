@@ -55,6 +55,15 @@ public class Invoice : Entity, IHasTimestamps
 
     public bool IsEditable => Status is InvoiceStatus.Draft or InvoiceStatus.Failed;
 
+    /// <summary>Elle yüklenen faturanın sağlayıcı adı: fatura başka bir yerde (ör. başka bir firmaya) kesilmiştir.</summary>
+    public const string ManualProvider = "Manuel";
+
+    /// <summary>
+    /// true: fatura bu sistemde kesilmedi; başka yerde kesilen PDF elle yüklendi. e-Arşiv referansı yoktur,
+    /// resmi PDF olarak yüklenen dosya kullanılır ve iptal sağlayıcıya gönderilmez.
+    /// </summary>
+    public bool IsManual => EArchiveProvider == ManualProvider;
+
     /// <summary>Kalemlerden ara toplam, KDV, tevkifat ve ödenecek tutarı yeniden hesaplar.</summary>
     public void Recalculate(decimal vatRate, WithholdingType? withholding = null)
     {
@@ -113,6 +122,29 @@ public class Invoice : Entity, IHasTimestamps
         SetProviderReference(reference, invoiceNumber, url);
         IssuedAt = now;
         LastError = null;
+    }
+
+    /// <summary>
+    /// Fatura başka yerde kesildi ve PDF'i elle yüklendi: taslak (veya başarısız) fatura kesilmiş sayılır.
+    /// Zaten elle yüklenmiş faturada yalnızca fatura numarası güncellenir (dosya değiştirme).
+    /// </summary>
+    public void MarkIssuedManually(string? invoiceNumber, DateTime now)
+    {
+        if (Status == InvoiceStatus.Issued && IsManual)
+        {
+            EArchiveInvoiceNumber = invoiceNumber ?? EArchiveInvoiceNumber;
+            Touch();
+            return;
+        }
+        if (!IsEditable) throw new InvalidInvoiceStateException($"'{Status}' durumundaki faturaya elle fatura yüklenemez.");
+        Status = InvoiceStatus.Issued;
+        EArchiveProvider = ManualProvider;
+        EArchiveReference = null;
+        EArchiveInvoiceUrl = null;
+        EArchiveInvoiceNumber = invoiceNumber;
+        IssuedAt = now;
+        LastError = null;
+        Touch();
     }
 
     /// <summary>

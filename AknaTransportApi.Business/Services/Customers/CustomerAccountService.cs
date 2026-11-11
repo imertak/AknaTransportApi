@@ -54,7 +54,33 @@ public sealed class CustomerAccountService(
         var totals = new CustomerBalanceTotalsDto(
             items.Sum(i => i.Invoiced), items.Sum(i => i.Charged), items.Sum(i => i.Collected), items.Sum(i => i.Refunded),
             items.Sum(i => i.Balance), items.Count(i => i.Balance != 0));
-        return new CustomerBalanceOverviewDto(totals, ordered);
+        return new CustomerBalanceOverviewDto(totals, ordered, await GetMonthsAsync(items.Select(i => i.CustomerId).ToHashSet(), ct));
+    }
+
+    /// <summary>Listede yer alan müşterilerin kesilen fatura, borç, tahsilat ve iade tutarları ay ay.</summary>
+    private async Task<List<CustomerBalanceMonthDto>> GetMonthsAsync(HashSet<Guid> customerIds, CancellationToken ct)
+    {
+        var invoiceMonths = await invoices.QueryAsNoTracking().Where(i => i.Status == InvoiceStatus.Issued)
+            .GroupBy(i => new { i.CustomerId, i.InvoiceDate.Year, i.InvoiceDate.Month })
+            .Select(g => new { g.Key.CustomerId, g.Key.Year, g.Key.Month, Total = g.Sum(i => i.PayableAmount), Count = g.Count() })
+            .ToListAsync(ct);
+        var txMonths = await transactions.QueryAsNoTracking()
+            .GroupBy(t => new { t.CustomerId, t.Type, t.TransactionDate.Year, t.TransactionDate.Month })
+            .Select(g => new { g.Key.CustomerId, g.Key.Type, g.Key.Year, g.Key.Month, Total = g.Sum(t => t.Amount) })
+            .ToListAsync(ct);
+
+        var invoiceByMonth = invoiceMonths.Where(x => customerIds.Contains(x.CustomerId)).ToLookup(x => (x.Year, x.Month));
+        var txByMonth = txMonths.Where(x => customerIds.Contains(x.CustomerId)).ToLookup(x => (x.Year, x.Month));
+        return invoiceByMonth.Select(g => g.Key).Union(txByMonth.Select(g => g.Key))
+            .OrderByDescending(k => k.Year).ThenByDescending(k => k.Month)
+            .Select(k =>
+            {
+                var tx = txByMonth[k].ToList();
+                decimal Sum(CustomerTransactionType type) => tx.Where(t => t.Type == type).Sum(t => t.Total);
+                return new CustomerBalanceMonthDto(k.Year, k.Month, invoiceByMonth[k].Sum(i => i.Total), invoiceByMonth[k].Sum(i => i.Count),
+                    Sum(CustomerTransactionType.Charge), Sum(CustomerTransactionType.Collection), Sum(CustomerTransactionType.Refund));
+            })
+            .ToList();
     }
 
     public async Task<CustomerLedgerDto> GetLedgerAsync(Guid customerId, CancellationToken ct)

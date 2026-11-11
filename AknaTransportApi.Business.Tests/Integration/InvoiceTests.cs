@@ -354,6 +354,76 @@ public class InvoiceTests(AknaApiFactory factory) : IClassFixture<AknaApiFactory
         return (response.Content.Headers.ContentDisposition!.FileNameStar ?? response.Content.Headers.ContentDisposition.FileName!.Trim('"'),
             await response.Content.ReadAsByteArrayAsync());
     }
+    private async Task<(HttpStatusCode Status, BaseResponse<InvoiceDetailDto>? Body)> UploadManualAsync(Guid invoiceId, byte[] content, string? number, string token)
+    {
+        using var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(content);
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+        form.Add(file, "file", "fatura.pdf");
+        if (number is not null) form.Add(new StringContent(number), "invoiceNumber");
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/invoices/{invoiceId}/manual-pdf") { Content = form };
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        using var response = await _client.SendAsync(request);
+        var text = await response.Content.ReadAsStringAsync();
+        var body = string.IsNullOrWhiteSpace(text) ? null
+            : System.Text.Json.JsonSerializer.Deserialize<BaseResponse<InvoiceDetailDto>>(text, AknaTransportApi.Business.Tests.Infrastructure.Api.Json);
+        return (response.StatusCode, body);
+    }
+
+    [Fact]
+    public async Task Manually_uploaded_invoice_is_issued_and_keeps_job_report()
+    {
+        var (admin, customerId, jobId) = await CompletedJobAsync();
+        var draft = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest { JobIds = [jobId] }, admin);
+        var sendsBefore = factory.EArchive.SendCount;
+
+        // PDF olmayan dosya reddedilir.
+        var (badStatus, _) = await UploadManualAsync(draft.Id, "merhaba"u8.ToArray(), null, admin);
+        Assert.Equal(HttpStatusCode.BadRequest, badStatus);
+
+        var pdf = "%PDF-1.4\n% elle yüklenen fatura\n%%EOF"u8.ToArray();
+        var (status, body) = await UploadManualAsync(draft.Id, pdf, "ABC2026000000123", admin);
+        Assert.Equal(HttpStatusCode.OK, status);
+        var invoice = body!.Data!;
+        Assert.Equal(InvoiceStatus.Issued, invoice.Status);
+        Assert.True(invoice.IsManual);
+        Assert.True(invoice.IsOfficial);
+        Assert.Equal("ABC2026000000123", invoice.EArchiveInvoiceNumber);
+        Assert.Null(invoice.Email); // otomatik e-posta gönderilmez
+        Assert.Equal(sendsBefore, factory.EArchive.SendCount); // e-Arşiv'e gidilmez
+
+        // Fatura PDF'i yüklenen dosyanın kendisidir; iş dökümü üretilmeye devam eder.
+        var (pdfStatus, pdfBytes) = await GetBytesAsync($"/api/invoices/{draft.Id}/pdf", admin);
+        Assert.Equal(HttpStatusCode.OK, pdfStatus);
+        Assert.Equal(pdf, pdfBytes);
+        var (reportStatus, _) = await GetBytesAsync($"/api/invoices/{draft.Id}/job-report/pdf", admin);
+        Assert.Equal(HttpStatusCode.OK, reportStatus);
+
+        // Bakiyeye kesilmiş fatura olarak yazılır; iş "faturalandı" görünür.
+        var ledger = await _client.OkAsync<CustomerLedgerDto>(HttpMethod.Get, $"/api/customers/{customerId}/ledger", token: admin);
+        Assert.Equal(invoice.PayableAmount, ledger.Balance.Invoiced);
+
+        // Dosya değiştirilebilir.
+        var replacement = "%PDF-1.7\n% yeni\n%%EOF"u8.ToArray();
+        var (replaceStatus, replaced) = await UploadManualAsync(draft.Id, replacement, null, admin);
+        Assert.Equal(HttpStatusCode.OK, replaceStatus);
+        Assert.Equal("ABC2026000000123", replaced!.Data!.EArchiveInvoiceNumber);
+        Assert.Equal(replacement, (await GetBytesAsync($"/api/invoices/{draft.Id}/pdf", admin)).Body);
+
+        // İptal e-Arşiv'e gitmeden yapılır; iş yeniden faturalanabilir.
+        var cancelled = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{draft.Id}/cancel", new CancelInvoiceRequest { Reason = "Hatalı" }, admin);
+        Assert.Equal(InvoiceStatus.Cancelled, cancelled.Status);
+        await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest { JobIds = [jobId] }, admin);
+    }
+
+    private async Task<(HttpStatusCode Status, byte[] Body)> GetBytesAsync(string url, string token)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        using var response = await _client.SendAsync(request);
+        return (response.StatusCode, await response.Content.ReadAsByteArrayAsync());
+    }
+
 }
 
 public class InvoiceWithoutProviderTests(NoEArchiveApiFactory factory) : IClassFixture<NoEArchiveApiFactory>
@@ -379,4 +449,5 @@ public class InvoiceWithoutProviderTests(NoEArchiveApiFactory factory) : IClassF
         Assert.Null(detail.Email);
         Assert.Equal(0, factory.EArchive.SendCount);
     }
+
 }

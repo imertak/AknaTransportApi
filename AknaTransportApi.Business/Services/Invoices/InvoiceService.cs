@@ -98,7 +98,7 @@ public sealed class InvoiceService(
             i.VatAmount, i.GrandTotal, i.Currency, i.Status, i.Status == InvoiceStatus.Issued, i.Notes, i.EArchiveProvider, i.EArchiveReference,
             i.EArchiveInvoiceNumber, i.EArchiveInvoiceUrl, i.LastError, i.CreatedByUserId, i.IssuedAt, i.CancelledAt, i.CreatedAt, i.UpdatedAt, items, email,
             i.WithholdingCode, withholding?.Name, i.WithholdingRate, i.WithholdingAmount, i.PayableAmount, i.AmountInWordsText,
-            i.Iban is null ? null : Iban.Format(i.Iban), i.Iban is null ? null : appOptions.Value.CompanyBankName.TrimOrNull(), ComposeDocumentNote(i), requiresSms, manualEmail, i.SingleLine);
+            i.Iban is null ? null : Iban.Format(i.Iban), i.Iban is null ? null : appOptions.Value.CompanyBankName.TrimOrNull(), ComposeDocumentNote(i), requiresSms, manualEmail, i.SingleLine, i.IsManual);
     }
 
     public IReadOnlyList<WithholdingTypeDto> GetWithholdingTypes() =>
@@ -262,12 +262,69 @@ public sealed class InvoiceService(
         return await GetAsync(id, CancellationToken.None);
     }
 
+    /// <summary>Elle yüklenebilecek fatura dosyasının üst sınırı.</summary>
+    public const int ManualPdfMaxBytes = 10 * 1024 * 1024;
+
+    public async Task<InvoiceDetailDto> UploadManualPdfAsync(Guid id, byte[] content, string? invoiceNumber, CancellationToken ct)
+    {
+        if (content.Length == 0) throw new BusinessValidationException("Fatura dosyası boş.", [new ErrorDetail("file", "Bir PDF dosyası seçin.")]);
+        if (content.Length > ManualPdfMaxBytes)
+            throw new BusinessValidationException("Fatura dosyası en fazla 10 MB olabilir.", [new ErrorDetail("file", "Dosya çok büyük.")]);
+        if (!IsPdf(content)) throw new BusinessValidationException("Yalnızca PDF dosyası yüklenebilir.", [new ErrorDetail("file", "Dosya PDF değil.")]);
+        var number = invoiceNumber.TrimOrNull();
+        if (number is { Length: > 50 }) throw new BusinessValidationException("Fatura numarası en fazla 50 karakter olabilir.", [new ErrorDetail("invoiceNumber", "Fatura numarası çok uzun.")]);
+
+        var now = clock.GetUtcNow().UtcDateTime;
+        var invoice = await invoices.Query().Include(i => i.Items).ThenInclude(x => x.Job)
+                          .FirstOrDefaultAsync(i => i.Id == id, ct) ?? throw NotFoundException.For("Fatura");
+        var replacing = invoice is { Status: InvoiceStatus.Issued, IsManual: true };
+        if (!replacing)
+        {
+            if (invoice.Status == InvoiceStatus.Pending)
+                throw new ConflictException("Fatura e-Arşiv'de işlemde. Önce portal taslağını silin, sonra faturayı elle yükleyin.");
+            invoice.EnsureEditable();
+            if (invoice.Items.Count == 0 || invoice.Items.Any(x => x.Job is null || x.Job.InvoiceId != invoice.Id || x.Job.Status == JobStatus.Cancelled))
+                throw new ConflictException("Faturadaki işlerden biri artık bu faturaya bağlı değil veya iptal edilmiş. Faturayı güncelleyin.");
+        }
+
+        // Dosya her yüklemede yeni adla saklanır; eski dosya kayıt güncellendikten sonra silinir.
+        var oldPath = invoice.InvoicePdfPath;
+        var path = await fileStorage.SaveAsync("invoices", $"{invoice.Id:N}-manual-{now:yyyyMMddHHmmss}.pdf", content, ct);
+        invoice.InvoicePdfPath = path;
+        invoice.MarkIssuedManually(number, now);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            try { await fileStorage.DeleteAsync(path, CancellationToken.None); } catch { /* kayıt güncellenmediyse dosya yetim kalmasın */ }
+            throw;
+        }
+        if (oldPath is not null && oldPath != path)
+        {
+            try { await fileStorage.DeleteAsync(oldPath, CancellationToken.None); }
+            catch (Exception ex) { logger.LogWarning(ex, "Eski fatura dosyası silinemedi. InvoiceId: {InvoiceId}", id); }
+        }
+
+        logger.LogInformation("Fatura elle yüklendi. InvoiceId: {InvoiceId}, Replaced: {Replaced}", id, replacing);
+        return await GetAsync(id, ct);
+    }
+
+    private static bool IsPdf(byte[] content)
+    {
+        // "%PDF-" imzası dosyanın ilk 1 KB'ı içinde olabilir (bazı üreticiler önüne bayt ekler).
+        var head = System.Text.Encoding.ASCII.GetString(content, 0, Math.Min(content.Length, 1024));
+        return head.Contains("%PDF-", StringComparison.Ordinal);
+    }
+
     public async Task<InvoiceDetailDto> CancelAsync(Guid id, CancelInvoiceRequest request, CancellationToken ct)
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var invoice = await invoices.GetByIdAsync(id, ct) ?? throw NotFoundException.For("Fatura");
 
-        if (invoice.Status == InvoiceStatus.Issued)
+        // Elle yüklenen fatura başka yerde kesildi: iptali orada yapılır, burada yalnızca kayıt iptal edilir.
+        if (invoice.Status == InvoiceStatus.Issued && !invoice.IsManual)
         {
             if (!eArchive.IsConfigured) throw new IntegrationUnavailableException("e-Arşiv sağlayıcısı yapılandırılmamış; kesilmiş fatura iptal edilemez.");
             var result = await eArchive.CancelAsync(Key(invoice), request.Reason.TrimOrNull() ?? "İptal", ct);
@@ -442,6 +499,12 @@ public sealed class InvoiceService(
     public async Task<OfficialInvoicePdf> GetOfficialDocumentAsync(Guid id, CancellationToken ct)
     {
         var invoice = await invoices.GetByIdAsync(id, ct) ?? throw NotFoundException.For("Fatura");
+        if (invoice is { Status: InvoiceStatus.Issued, IsManual: true })
+        {
+            // Elle yüklenen fatura: yüklenen dosyanın kendisi.
+            if (invoice.InvoicePdfPath is { } manualPath && await fileStorage.ReadAsync(manualPath, ct) is { } uploaded) return new(uploaded, FromProvider: true);
+            throw new ConflictException("Elle yüklenen fatura dosyası bulunamadı. Faturayı yeniden yükleyin.");
+        }
         if (invoice.Status != InvoiceStatus.Issued || string.IsNullOrEmpty(invoice.EArchiveReference))
             throw new ConflictException("Resmi fatura PDF'i yalnızca kesilmiş faturalar için mevcuttur.");
 
