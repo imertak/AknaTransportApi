@@ -75,7 +75,7 @@
     ]
    ],
    "paint": {
-    "fill-color": "#EEF0EE",
+    "fill-color": "#CFE6C3",
     "fill-opacity": 0.8
    }
   },
@@ -85,7 +85,7 @@
    "source": "openmaptiles",
    "source-layer": "park",
    "paint": {
-    "fill-color": "#EEF0EE"
+    "fill-color": "#CFE6C3"
    }
   },
   {
@@ -94,7 +94,7 @@
    "source": "openmaptiles",
    "source-layer": "water",
    "paint": {
-    "fill-color": "#DDE1E5"
+    "fill-color": "#A9D3EE"
    }
   },
   {
@@ -104,7 +104,7 @@
    "source-layer": "waterway",
    "minzoom": 10,
    "paint": {
-    "line-color": "#DDE1E5",
+    "line-color": "#A9D3EE",
     "line-width": [
      "interpolate",
      [
@@ -726,7 +726,7 @@
     "text-size": 12
    },
    "paint": {
-    "text-color": "#8B939B",
+    "text-color": "#3F7AA6",
     "text-halo-color": "#FFFFFF",
     "text-halo-width": 1.4,
     "text-halo-blur": 0.2
