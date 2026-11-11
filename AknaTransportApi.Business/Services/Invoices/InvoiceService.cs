@@ -80,8 +80,9 @@ public sealed class InvoiceService(
         }).FirstOrDefaultAsync(ct) ?? throw NotFoundException.For("Fatura");
 
         var items = await invoiceItems.QueryAsNoTracking().Where(x => x.InvoiceId == id)
-            .OrderBy(x => x.Job!.JobDate).ThenBy(x => x.Job!.JobNumber)
-            .Select(x => new InvoiceItemDto(x.Id, x.JobId, x.Job!.JobNumber, x.Job.JobDate, x.Job.StoreName, x.Description, x.Quantity, x.UnitPrice, x.VatRate, x.LineTotal))
+            .OrderBy(x => x.Job!.JobDate).ThenBy(x => x.Job!.JobNumber).ThenBy(x => x.Id)
+            .Select(x => new InvoiceItemDto(x.Id, x.JobId, x.Job == null ? null : x.Job.JobNumber, x.Job == null ? null : x.Job.JobDate,
+                x.Job == null ? null : x.Job.StoreName, x.Description, x.Quantity, x.UnitPrice, x.VatRate, x.LineTotal))
             .ToListAsync(ct);
 
         var email = await emailLogs.QueryAsNoTracking().Where(e => e.InvoiceId == id && e.Type == EmailType.InvoiceDelivery)
@@ -99,7 +100,8 @@ public sealed class InvoiceService(
             i.VatAmount, i.GrandTotal, i.Currency, i.Status, i.Status == InvoiceStatus.Issued, i.Notes, i.EArchiveProvider, i.EArchiveReference,
             i.EArchiveInvoiceNumber, i.EArchiveInvoiceUrl, i.LastError, i.CreatedByUserId, i.IssuedAt, i.CancelledAt, i.CreatedAt, i.UpdatedAt, items, email,
             i.WithholdingCode, withholding?.Name, i.WithholdingRate, i.WithholdingAmount, i.PayableAmount, i.AmountInWordsText,
-            i.Iban is null ? null : Iban.Format(i.Iban), i.Iban is null ? null : appOptions.Value.CompanyBankName.TrimOrNull(), ComposeDocumentNote(i), requiresSms, manualEmail, i.SingleLine, i.IsManual);
+            i.Iban is null ? null : Iban.Format(i.Iban), i.Iban is null ? null : appOptions.Value.CompanyBankName.TrimOrNull(), ComposeDocumentNote(i), requiresSms, manualEmail, i.SingleLine, i.IsManual,
+            IsFreeForm: items.Count > 0 && items.All(x => x.JobId is null));
     }
 
     public IReadOnlyList<WithholdingTypeDto> GetWithholdingTypes() =>
@@ -137,13 +139,14 @@ public sealed class InvoiceService(
     public async Task<IReadOnlyList<JobDto>> GetJobsAsync(Guid id, CancellationToken ct)
     {
         if (!await invoices.QueryAsNoTracking().AnyAsync(i => i.Id == id, ct)) throw NotFoundException.For("Fatura");
-        var jobIds = invoiceItems.QueryAsNoTracking().Where(x => x.InvoiceId == id).Select(x => x.JobId);
+        var jobIds = invoiceItems.QueryAsNoTracking().Where(x => x.InvoiceId == id && x.JobId != null).Select(x => x.JobId!.Value);
         return await jobs.QueryAsNoTracking().Where(j => jobIds.Contains(j.Id)).OrderBy(j => j.JobDate).ThenBy(j => j.JobNumber)
             .Select(JobMappings.Projection).ToListAsync(ct);
     }
 
     public async Task<InvoiceDetailDto> CreateAsync(CreateInvoiceRequest request, CancellationToken ct)
     {
+        if (request.JobIds.Count == 0) return await CreateFreeFormAsync(request, ct);
         var now = clock.GetUtcNow().UtcDateTime;
         var selected = await LoadInvoiceableJobsAsync(request.JobIds, currentInvoiceId: null, ct);
         var customer = await LoadCustomerForInvoiceAsync(selected[0].CustomerId, ct);
@@ -176,11 +179,80 @@ public sealed class InvoiceService(
         return await GetAsync(invoiceId, ct);
     }
 
+    /// <summary>
+    /// İşe bağlı olmayan serbest fatura: kalemler elle girilir. Müşteri kayıtlıysa seçilir, değilse girilen
+    /// bilgilerle faturayla aynı işlemde müşteri olarak kaydedilir (e-Arşiv ve e-posta müşteri kaydını kullanır).
+    /// </summary>
+    private async Task<InvoiceDetailDto> CreateFreeFormAsync(CreateInvoiceRequest request, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow().UtcDateTime;
+        if (request.Lines.Count == 0)
+            throw new BusinessValidationException("En az bir iş seçin veya fatura kalemi girin.", [new ErrorDetail("lines", "En az bir kalem girin.")]);
+
+        Customer? existing = null;
+        if (request.CustomerId is { } customerId)
+        {
+            existing = await LoadCustomerForInvoiceAsync(customerId, ct);
+        }
+        else if (request.NewCustomer is { } newCustomer)
+        {
+            var taxNumber = newCustomer.TaxNumber.TrimOrNull();
+            if (taxNumber is not null && await customers.QueryAsNoTracking().Where(c => c.TaxNumber == taxNumber).Select(c => c.CompanyName).FirstOrDefaultAsync(ct) is { } name)
+                throw new BusinessValidationException($"Bu VKN/TCKN ile kayıtlı bir müşteri var: {name}. Kayıtlı müşteri olarak seçin.",
+                    [new ErrorDetail("newCustomer.taxNumber", "Bu VKN/TCKN zaten kayıtlı.")]);
+        }
+        else
+        {
+            throw new BusinessValidationException("Kayıtlı bir müşteri seçin veya yeni müşteri bilgilerini girin.", [new ErrorDetail("customerId", "Müşteri zorunludur.")]);
+        }
+
+        var invoiceDate = request.InvoiceDate ?? DateOnly.FromDateTime(now);
+        var withholding = request.NoWithholding ? null : ResolveWithholding(request.WithholdingCode ?? appOptions.Value.DefaultWithholdingCode);
+        var iban = ResolveIban(request.Iban);
+
+        var (invoiceId, createdCustomerId) = await unitOfWork.ExecuteInTransactionAsync(async token =>
+        {
+            Guid? created = null;
+            var customerId = existing?.Id;
+            if (customerId is null)
+            {
+                var customer = new Customer { IsActive = true };
+                customer.Apply(request.NewCustomer!);
+                customers.Add(customer);
+                customerId = created = customer.Id;
+            }
+            var invoice = new Invoice
+            {
+                CustomerId = customerId.Value,
+                InvoiceDate = invoiceDate,
+                Currency = Money.DefaultCurrency,
+                Notes = request.Notes.TrimOrNull(),
+                CreatedByUserId = currentUser.UserId,
+                InvoiceNumber = await numberGenerator.NextInvoiceNumberAsync(invoiceDate, token),
+                Iban = iban,
+                // Serbest faturada kalemler zaten elle girilir; tek kalem seçeneği uygulanmaz.
+                SingleLine = false,
+            };
+            foreach (var line in request.Lines) invoice.Items.Add(CreateFreeItem(invoice.Id, line));
+            invoice.Recalculate(request.VatRate ?? appOptions.Value.DefaultVatRate, withholding);
+            invoices.Add(invoice);
+            await unitOfWork.SaveChangesAsync(token);
+            return (invoice.Id, created);
+        }, ct);
+
+        logger.LogInformation("Serbest taslak fatura oluşturuldu. InvoiceId: {InvoiceId}, LineCount: {Count}, NewCustomerId: {CustomerId}",
+            invoiceId, request.Lines.Count, createdCustomerId);
+        return await GetAsync(invoiceId, ct);
+    }
+
     public async Task<InvoiceDetailDto> UpdateAsync(Guid id, UpdateInvoiceRequest request, CancellationToken ct)
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var invoice = await invoices.Query().Include(i => i.Items).FirstOrDefaultAsync(i => i.Id == id, ct) ?? throw NotFoundException.For("Fatura");
         invoice.EnsureEditable();
+        if (invoice.IsFreeForm) return await UpdateFreeFormAsync(invoice, request, ct);
+        if (request.JobIds.Count == 0)
+            throw new BusinessValidationException("İşlerden kesilen faturada en az bir iş seçilmelidir.", [new ErrorDetail("jobIds", "En az bir iş seçin.")]);
 
         var selected = await LoadInvoiceableJobsAsync(request.JobIds, currentInvoiceId: id, ct);
         if (selected.Any(j => j.CustomerId != invoice.CustomerId))
@@ -216,6 +288,31 @@ public sealed class InvoiceService(
         return await GetAsync(id, ct);
     }
 
+    private async Task<InvoiceDetailDto> UpdateFreeFormAsync(Invoice invoice, UpdateInvoiceRequest request, CancellationToken ct)
+    {
+        if (request.JobIds.Count > 0 || request.Lines.Count == 0)
+            throw new BusinessValidationException("Serbest faturaya iş eklenemez; en az bir kalem girin.", [new ErrorDetail("lines", "En az bir kalem girin.")]);
+        await LoadCustomerForInvoiceAsync(invoice.CustomerId, ct);
+        var withholding = ResolveWithholding(request.WithholdingCode);
+        var iban = ResolveIban(request.Iban);
+
+        foreach (var item in invoice.Items.ToList()) invoiceItems.Remove(item);
+        invoice.Items.Clear();
+        foreach (var line in request.Lines)
+        {
+            var item = CreateFreeItem(invoice.Id, line);
+            invoice.Items.Add(item);
+            invoiceItems.Add(item);
+        }
+        invoice.InvoiceDate = request.InvoiceDate;
+        invoice.Notes = request.Notes.TrimOrNull();
+        invoice.Iban = iban;
+        invoice.SingleLine = false;
+        invoice.Recalculate(request.VatRate, withholding);
+        await unitOfWork.SaveChangesAsync(ct);
+        return await GetAsync(invoice.Id, ct);
+    }
+
     public async Task<InvoiceDetailDto> IssueAsync(Guid id, CancellationToken ct)
     {
         if (!eArchive.IsConfigured)
@@ -232,7 +329,7 @@ public sealed class InvoiceService(
 
         // Kesimden önce faturadaki her işin hâlâ bu faturaya bağlı ve iptal edilmemiş olduğu doğrulanır.
         // Yönetici işi bitmeden de faturalayabilir; iptal edilmiş iş faturalanamaz.
-        if (invoice.Items.Count == 0 || invoice.Items.Any(x => x.Job is null || x.Job.InvoiceId != invoice.Id || x.Job.Status == JobStatus.Cancelled))
+        if (!ItemsStillValid(invoice))
             throw new ConflictException("Faturadaki işlerden biri artık bu faturaya bağlı değil veya iptal edilmiş. Faturayı güncelleyin.");
 
         // Pending durumu kaydedilir; ConcurrencyStamp sayesinde aynı fatura eşzamanlı iki kez gönderilemez.
@@ -284,7 +381,7 @@ public sealed class InvoiceService(
             if (invoice.Status == InvoiceStatus.Pending)
                 throw new ConflictException("Fatura e-Arşiv'de işlemde. Önce portal taslağını silin, sonra faturayı elle yükleyin.");
             invoice.EnsureEditable();
-            if (invoice.Items.Count == 0 || invoice.Items.Any(x => x.Job is null || x.Job.InvoiceId != invoice.Id || x.Job.Status == JobStatus.Cancelled))
+            if (!ItemsStillValid(invoice))
                 throw new ConflictException("Faturadaki işlerden biri artık bu faturaya bağlı değil veya iptal edilmiş. Faturayı güncelleyin.");
         }
 
@@ -311,6 +408,14 @@ public sealed class InvoiceService(
         logger.LogInformation("Fatura elle yüklendi. InvoiceId: {InvoiceId}, Replaced: {Replaced}", id, replacing);
         return await GetAsync(id, ct);
     }
+
+    /// <summary>
+    /// Fatura kesilebilir mi: en az bir kalem var ve işe bağlı her kalemin işi hâlâ bu faturada ve iptal edilmemiş.
+    /// Serbest (işe bağlı olmayan) kalemler kontrol dışıdır. Kalemler işleriyle birlikte yüklenmiş olmalıdır.
+    /// </summary>
+    private static bool ItemsStillValid(Invoice invoice) =>
+        invoice.Items.Count > 0
+        && invoice.Items.Where(x => x.JobId is not null).All(x => x.Job is not null && x.Job.InvoiceId == invoice.Id && x.Job.Status != JobStatus.Cancelled);
 
     private static bool IsPdf(byte[] content)
     {
@@ -393,7 +498,7 @@ public sealed class InvoiceService(
                 InvoiceId = id,
                 Type = EmailType.InvoiceDelivery,
                 RecipientEmail = RecipientList(customer),
-                Subject = EmailTemplates.InvoiceSubject,
+                Subject = EmailTemplates.IssuedInvoiceSubject(await HasJobsAsync(id, ct)),
                 CreatedAt = now,
             };
             emailLogs.Add(log);
@@ -423,7 +528,9 @@ public sealed class InvoiceService(
             InvoiceId = id,
             Type = EmailType.InvoiceManual,
             RecipientEmail = RecipientList(customer),
-            Subject = invoice.Status == InvoiceStatus.Issued ? EmailTemplates.InvoiceSubject : EmailTemplates.DraftInvoiceSubject(invoice.InvoiceNumber),
+            Subject = await HasJobsAsync(id, ct) is var hasJobs && invoice.Status == InvoiceStatus.Issued
+                ? EmailTemplates.IssuedInvoiceSubject(hasJobs)
+                : EmailTemplates.DraftInvoiceSubject(invoice.InvoiceNumber, hasJobs),
             Status = EmailStatus.Pending,
             CreatedAt = now,
         };
@@ -474,7 +581,7 @@ public sealed class InvoiceService(
         var customer = invoice.Customer ?? await customers.QueryAsNoTracking().FirstAsync(c => c.Id == invoice.CustomerId, ct);
         var lines = invoice.SingleLine
             ? new List<DraftInvoiceLine> { new(Invoice.SingleLineDescription, 1, invoice.SubTotal, invoice.SubTotal) }
-            : await invoiceItems.QueryAsNoTracking().Where(x => x.InvoiceId == invoice.Id).OrderBy(x => x.Job!.JobDate)
+            : await invoiceItems.QueryAsNoTracking().Where(x => x.InvoiceId == invoice.Id).OrderBy(x => x.Job!.JobDate).ThenBy(x => x.Id)
                 .Select(x => new DraftInvoiceLine(x.Description, x.Quantity, x.UnitPrice, x.LineTotal)).ToListAsync(ct);
         var withholding = WithholdingTypes.Find(invoice.WithholdingCode);
         return draftPdf.Generate(new DraftInvoiceDocument(invoice.InvoiceNumber, invoice.InvoiceDate, invoice.Status, customer.CompanyName, customer.TaxOffice,
@@ -553,7 +660,7 @@ public sealed class InvoiceService(
                          .FirstOrDefaultAsync(ct) ?? throw NotFoundException.For("Fatura");
 
         // Yalnızca bu faturanın kalemlerindeki işler: müşteriye başka işlerin kaydı gitmez.
-        var rows = await invoiceItems.QueryAsNoTracking().Where(x => x.InvoiceId == id)
+        var rows = await invoiceItems.QueryAsNoTracking().Where(x => x.InvoiceId == id && x.JobId != null)
             .OrderBy(x => x.Job!.JobDate).ThenBy(x => x.Job!.JobNumber)
             .Select(x => new JobReportRow(x.Job!.JobDate, x.Job.StoreName, x.Job.VehicleType, (x.Job.RouteDescription == "" ? x.Job.Description : x.Job.Description == "" ? x.Job.RouteDescription : x.Job.RouteDescription + " (" + x.Job.Description + ")"), x.Job.Price, header.CustomerName))
             .ToListAsync(ct);
@@ -640,20 +747,20 @@ public sealed class InvoiceService(
     /// Sağlayıcı yanıtını faturaya uygular. Issued olduğunda e-posta kaydı ve outbox mesajı
     /// fatura durumuyla aynı SaveChanges içinde yazılır (transactional outbox).
     /// </summary>
-    private Task ApplySendResultAsync(Invoice invoice, Customer customer, EArchiveSendResult result)
+    private async Task ApplySendResultAsync(Invoice invoice, Customer customer, EArchiveSendResult result)
     {
         var now = clock.GetUtcNow().UtcDateTime;
         if (!result.Accepted || result.Status == EArchiveDocumentStatus.Rejected)
         {
             invoice.MarkFailed(result.ErrorMessage ?? "e-Arşiv sağlayıcısı faturayı reddetti.");
             logger.LogWarning("e-Arşiv faturası reddedildi. InvoiceId: {InvoiceId}", invoice.Id);
-            return Task.CompletedTask;
+            return;
         }
 
         if (result.Status == EArchiveDocumentStatus.Issued && !string.IsNullOrWhiteSpace(result.Reference))
         {
             invoice.MarkIssued(result.Reference, result.InvoiceNumber, result.InvoiceUrl, now);
-            EnqueueInvoiceEmail(invoice, customer, now);
+            EnqueueInvoiceEmail(invoice, customer, await HasJobsAsync(invoice.Id, CancellationToken.None), now);
             logger.LogInformation("e-Arşiv faturası kesildi. InvoiceId: {InvoiceId}", invoice.Id);
         }
         else
@@ -661,8 +768,11 @@ public sealed class InvoiceService(
             // Sağlayıcı işlemde: referans saklanır, durum arka planda senkronize edilir.
             invoice.SetProviderReference(result.Reference, result.InvoiceNumber, result.InvoiceUrl);
         }
-        return Task.CompletedTask;
     }
+
+    /// <summary>Faturada işe bağlı kalem var mı (yoksa serbest faturadır; iş dökümü gönderilmez).</summary>
+    private Task<bool> HasJobsAsync(Guid invoiceId, CancellationToken ct) =>
+        invoiceItems.QueryAsNoTracking().AnyAsync(x => x.InvoiceId == invoiceId && x.JobId != null, ct);
 
     public async Task<EArchiveSmsChallengeDto> SendSignSmsAsync(Guid id, CancellationToken ct)
     {
@@ -744,14 +854,14 @@ public sealed class InvoiceService(
     private static EArchiveDocumentKey Key(Invoice invoice) =>
         new(invoice.EArchiveReference ?? throw new InvalidInvoiceStateException("e-Arşiv referansı yok."), invoice.InvoiceDate);
 
-    private void EnqueueInvoiceEmail(Invoice invoice, Customer customer, DateTime now)
+    private void EnqueueInvoiceEmail(Invoice invoice, Customer customer, bool hasJobs, DateTime now)
     {
         var log = new EmailLog
         {
             InvoiceId = invoice.Id,
             Type = EmailType.InvoiceDelivery,
             RecipientEmail = RecipientList(customer),
-            Subject = EmailTemplates.InvoiceSubject,
+            Subject = EmailTemplates.IssuedInvoiceSubject(hasJobs),
             Status = EmailStatus.Pending,
             CreatedAt = now,
         };
@@ -817,6 +927,15 @@ public sealed class InvoiceService(
             : $"{job.JobDate:dd.MM.yyyy} {job.StoreName.Trim()} - {InvoiceLineText(job)} ({job.JobNumber})", 500),
         Quantity = 1,
         UnitPrice = job.Price,
+    };
+
+    private static InvoiceItem CreateFreeItem(Guid invoiceId, InvoiceLineRequest line) => new()
+    {
+        InvoiceId = invoiceId,
+        JobId = null,
+        Description = Truncate(line.Description.Trim(), 500),
+        Quantity = line.Quantity,
+        UnitPrice = Money.Round(line.UnitPrice),
     };
 
     private static string InvoiceLineText(TransportJob job) =>

@@ -32,12 +32,13 @@ public sealed record InvoiceListItemDto(
     // true: fatura başka yerde kesildi, PDF'i elle yüklendi.
     bool IsManual = false);
 
+/// <summary>Fatura kalemi. İş alanları (JobId, JobNumber, JobDate, StoreName) işe bağlı olmayan serbest kalemde boştur.</summary>
 public sealed record InvoiceItemDto(
     Guid Id,
-    Guid JobId,
-    string JobNumber,
-    DateOnly JobDate,
-    string StoreName,
+    Guid? JobId,
+    string? JobNumber,
+    DateOnly? JobDate,
+    string? StoreName,
     string Description,
     decimal Quantity,
     decimal UnitPrice,
@@ -92,7 +93,9 @@ public sealed record InvoiceDetailDto(
     /// true: faturaya işler tek tek değil, tek kalem "Nakliye Bedeli" olarak yazılır (iş dökümü değişmez).
     bool SingleLine = false,
     /// true: fatura başka yerde kesildi, PDF'i elle yüklendi (e-Arşiv referansı yoktur).
-    bool IsManual = false);
+    bool IsManual = false,
+    /// true: fatura işlerden değil, elle girilen kalemlerden oluşur (işe bağlı olmayan serbest fatura).
+    bool IsFreeForm = false);
 
 public sealed record WithholdingTypeDto(string Code, int Rate, string Fraction, string Name);
 
@@ -104,10 +107,33 @@ public sealed class SignInvoiceRequest
     public string Code { get; set; } = string.Empty;
 }
 
+/// <summary>İşe bağlı olmayan (serbest) fatura kalemi.</summary>
+public sealed class InvoiceLineRequest
+{
+    public string Description { get; set; } = string.Empty;
+    public decimal Quantity { get; set; } = 1;
+    /// <summary>KDV hariç birim fiyat.</summary>
+    public decimal UnitPrice { get; set; }
+}
+
+/// <summary>
+/// Fatura oluşturma isteği. İki türü vardır:
+/// <list type="bullet">
+/// <item>İşlerden fatura: <see cref="JobIds"/> dolu; müşteri işlerden gelir, kalemler işlerden oluşur.</item>
+/// <item>Serbest fatura: <see cref="JobIds"/> boş, <see cref="Lines"/> dolu; müşteri <see cref="CustomerId"/> (kayıtlı)
+/// veya <see cref="NewCustomer"/> (fatura ile birlikte kaydedilir) ile verilir.</item>
+/// </list>
+/// </summary>
 public sealed class CreateInvoiceRequest
 {
-    /// <summary>Faturalanacak tamamlanmış işler. Hepsi aynı müşteriye ait olmalıdır.</summary>
+    /// <summary>Faturalanacak işler. Hepsi aynı müşteriye ait olmalıdır. Serbest faturada boş bırakılır.</summary>
     public List<Guid> JobIds { get; set; } = [];
+    /// <summary>Serbest fatura: kayıtlı müşteri.</summary>
+    public Guid? CustomerId { get; set; }
+    /// <summary>Serbest fatura: kayıtlı olmayan müşteri. Fatura ile aynı işlemde müşteri olarak kaydedilir.</summary>
+    public CustomerRequest? NewCustomer { get; set; }
+    /// <summary>Serbest fatura kalemleri.</summary>
+    public List<InvoiceLineRequest> Lines { get; set; } = [];
     /// <summary>Boş bırakılırsa bugünün tarihi kullanılır.</summary>
     public DateOnly? InvoiceDate { get; set; }
     /// <summary>Boş bırakılırsa varsayılan KDV oranı (%20) kullanılır.</summary>
@@ -125,7 +151,10 @@ public sealed class CreateInvoiceRequest
 
 public sealed class UpdateInvoiceRequest
 {
+    /// <summary>İşlerden kesilen faturanın işleri. Serbest faturada boş bırakılır.</summary>
     public List<Guid> JobIds { get; set; } = [];
+    /// <summary>Serbest faturanın kalemleri (işlerden kesilen faturada boş bırakılır).</summary>
+    public List<InvoiceLineRequest> Lines { get; set; } = [];
     public DateOnly InvoiceDate { get; set; }
     public decimal VatRate { get; set; }
     public string? Notes { get; set; }

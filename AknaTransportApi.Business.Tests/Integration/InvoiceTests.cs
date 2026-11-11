@@ -212,6 +212,101 @@ public class InvoiceTests(AknaApiFactory factory) : IClassFixture<AknaApiFactory
     }
 
     [Fact]
+    public async Task Free_form_invoice_for_registered_customer_has_manual_lines_and_no_job_report()
+    {
+        var admin = await _client.AdminTokenAsync();
+        var email = $"serbest{Guid.NewGuid():N}"[..14] + "@example.com";
+        var customer = await _client.OkAsync<CustomerDto>(HttpMethod.Post, "/api/customers",
+            new CustomerRequest { CompanyName = $"Serbest {Guid.NewGuid():N}"[..16], Email = email, TaxNumber = "1234567890" }, admin);
+
+        var invoice = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest
+        {
+            CustomerId = customer.Id,
+            NoWithholding = true,
+            Lines = [new InvoiceLineRequest { Description = "Depolama hizmeti", Quantity = 2, UnitPrice = 1500m }, new InvoiceLineRequest { Description = "Forklift", UnitPrice = 1000m }],
+        }, admin);
+        Assert.Equal(InvoiceStatus.Draft, invoice.Status);
+        Assert.True(invoice.IsFreeForm);
+        Assert.Equal(customer.Id, invoice.CustomerId);
+        Assert.Equal(4000m, invoice.SubTotal);
+        Assert.Equal(4800m, invoice.GrandTotal);
+        Assert.Equal(2, invoice.Items.Count);
+        Assert.All(invoice.Items, i => Assert.Null(i.JobId));
+        Assert.Contains(invoice.Items, i => i.Description == "Depolama hizmeti" && i.Quantity == 2 && i.LineTotal == 3000m);
+
+        var list = await _client.OkAsync<PagedResult<InvoiceListItemDto>>(HttpMethod.Get, $"/api/invoices?customerId={customer.Id}", token: admin);
+        var row = Assert.Single(list.Items);
+        Assert.Equal(0, row.JobCount);
+        Assert.Null(row.FirstJobId);
+
+        // Kalemler düzenlenebilir; serbest faturaya iş eklenemez.
+        var updated = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Put, $"/api/invoices/{invoice.Id}", new UpdateInvoiceRequest
+        {
+            InvoiceDate = invoice.InvoiceDate,
+            VatRate = 20,
+            Lines = [new InvoiceLineRequest { Description = "Depolama hizmeti", Quantity = 1, UnitPrice = 2500m }],
+        }, admin);
+        Assert.Equal(2500m, updated.SubTotal);
+        Assert.Single(updated.Items);
+
+        // Taslak e-postası: iş dökümü eklenmez, konu dökümden söz etmez.
+        await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{invoice.Id}/send-email", token: admin);
+        await ProcessOutboxAsync();
+        var draftMail = Assert.Single(factory.Email.Sent, m => m.To == email);
+        Assert.DoesNotContain("Döküm", draftMail.Subject);
+        Assert.Equal([$"Fatura_Taslagi_{invoice.InvoiceNumber}.pdf"], draftMail.Attachments.Where(a => a.ContentId is null).Select(a => a.FileName));
+        Assert.DoesNotContain("İş sayısı", draftMail.TextBody);
+
+        // Kesilir ve kesilen faturanın e-postası da yalnızca faturayı içerir.
+        var issued = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{invoice.Id}/issue", token: admin);
+        Assert.Equal(InvoiceStatus.Issued, issued.Status);
+        await ProcessOutboxAsync();
+        var issuedMail = Assert.Single(factory.Email.Sent, m => m.To == email && m.Subject == EmailTemplates.FreeFormInvoiceSubject);
+        Assert.DoesNotContain(issuedMail.Attachments, a => a.FileName.StartsWith("Is_Dokumu_"));
+    }
+
+    [Fact]
+    public async Task Free_form_invoice_creates_unregistered_customer()
+    {
+        var admin = await _client.AdminTokenAsync();
+        var taxNumber = string.Concat(Guid.NewGuid().ToString("N").Where(char.IsAsciiDigit).Concat("0000000000"))[..10];
+        var name = $"Yeni Alıcı {Guid.NewGuid():N}"[..20];
+        var invoice = await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest
+        {
+            NewCustomer = new CustomerRequest { CompanyName = name, TaxNumber = taxNumber, TaxOffice = "Gebze", Address = "Gebze OSB", Email = "yeni@alici.example" },
+            Lines = [new InvoiceLineRequest { Description = "Nakliye", UnitPrice = 1000m }],
+        }, admin);
+        Assert.Equal(name, invoice.CustomerName);
+        var customer = await _client.OkAsync<CustomerDto>(HttpMethod.Get, $"/api/customers/{invoice.CustomerId}", token: admin);
+        Assert.Equal(taxNumber, customer.TaxNumber);
+        Assert.Equal("Gebze OSB", customer.Address);
+
+        // Aynı VKN ile ikinci kez "yeni müşteri" girilemez; kayıtlı müşteri seçilmelidir.
+        var (dupStatus, dup) = await _client.SendAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest
+        {
+            NewCustomer = new CustomerRequest { CompanyName = "Başka", TaxNumber = taxNumber, Email = "baska@alici.example" },
+            Lines = [new InvoiceLineRequest { Description = "Nakliye", UnitPrice = 1000m }],
+        }, admin);
+        Assert.Equal(HttpStatusCode.BadRequest, dupStatus);
+        Assert.Contains(name, dup!.Message);
+
+        // Yeni müşteride VKN/TCKN ve e-posta zorunludur; müşteri veya kalem olmadan fatura oluşmaz.
+        var (missingStatus, _) = await _client.SendAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest
+        {
+            NewCustomer = new CustomerRequest { CompanyName = "Eksik" },
+            Lines = [new InvoiceLineRequest { Description = "Nakliye", UnitPrice = 1000m }],
+        }, admin);
+        Assert.Equal(HttpStatusCode.BadRequest, missingStatus);
+        var (noCustomer, _) = await _client.SendAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest
+        {
+            Lines = [new InvoiceLineRequest { Description = "Nakliye", UnitPrice = 1000m }],
+        }, admin);
+        Assert.Equal(HttpStatusCode.BadRequest, noCustomer);
+        var (noLines, _) = await _client.SendAsync<InvoiceDetailDto>(HttpMethod.Post, "/api/invoices", new CreateInvoiceRequest { CustomerId = invoice.CustomerId }, admin);
+        Assert.Equal(HttpStatusCode.BadRequest, noLines);
+    }
+
+    [Fact]
     public async Task Invoice_requires_valid_customer_email()
     {
         var admin = await _client.AdminTokenAsync();

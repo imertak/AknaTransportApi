@@ -126,22 +126,32 @@ public sealed class OutboxProcessor(
         {
             invoicePdf = new EmailAttachment($"Fatura_Taslagi_{invoice.InvoiceNumber}.pdf", (await invoiceService.GetPdfAsync(payload.InvoiceId, ct)).Content);
         }
+        // Serbest (işe bağlı olmayan) faturada iş dökümü yoktur; yalnızca fatura gönderilir.
         var report = await invoiceService.BuildJobReportAsync(payload.InvoiceId, ct);
-        var reportAttachment = new EmailAttachment($"Is_Dokumu_{invoice.InvoiceNumber}.pdf", reportPdf.Generate(report));
+        EmailAttachment? reportAttachment = report.Rows.Count > 0
+            ? new EmailAttachment($"Is_Dokumu_{invoice.InvoiceNumber}.pdf", reportPdf.Generate(report))
+            : null;
         var detail = await invoiceService.GetAsync(payload.InvoiceId, ct);
+        var jobCount = detail.Items.Count(i => i.JobId is not null);
+        var attachmentNames = new List<string>();
+        if (original is not null) attachmentNames.Add(original.FileName);
+        attachmentNames.Add(invoicePdf.FileName);
+        if (reportAttachment is not null) attachmentNames.Add(reportAttachment.FileName);
         var (html, text) = EmailTemplates.Invoice(new InvoiceEmailModel(
-            detail.CustomerName, number, detail.InvoiceDate, detail.Items.Count, detail.SubTotal, detail.VatAmount,
+            detail.CustomerName, number, detail.InvoiceDate, jobCount, detail.SubTotal, detail.VatAmount,
             detail.WithholdingCode is null ? detail.GrandTotal : detail.PayableAmount, detail.Currency, detail.Iban, detail.BankName,
-            Draft: !issued, Attachments: original is null
-                ? [invoicePdf.FileName, reportAttachment.FileName]
-                : [original.FileName, invoicePdf.FileName, reportAttachment.FileName]));
+            Draft: !issued, Attachments: attachmentNames));
 
         // Kayıtta alıcılar "; " ile ayrılır: ilki ana alıcı, diğerleri bilgi (CC).
         var recipients = log.RecipientEmail.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         await emailService.SendAsync(new EmailMessage(recipients[0], detail.CustomerName, log.Subject, html, text,
-            original is null
-                ? [EmailTemplates.Logo, invoicePdf, reportAttachment]
-                : [EmailTemplates.Logo, new EmailAttachment(original.FileName, original.Content, original.ContentType), invoicePdf, reportAttachment],
+            new[]
+            {
+                EmailTemplates.Logo,
+                original is null ? null : new EmailAttachment(original.FileName, original.Content, original.ContentType),
+                invoicePdf,
+                reportAttachment,
+            }.OfType<EmailAttachment>().ToList(),
             IdempotencyKey: $"invoice-email-{log.Id:N}") { Cc = recipients.Skip(1).ToList() }, ct);
 
         log.Status = EmailStatus.Sent;

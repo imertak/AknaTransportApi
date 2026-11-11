@@ -1108,3 +1108,21 @@ BEGIN
     END IF;
 END $EF$;
 COMMIT;
+
+
+START TRANSACTION;
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261111202120_AllowFreeFormInvoiceItems') THEN
+    ALTER TABLE invoice_items ALTER COLUMN "JobId" DROP NOT NULL;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261111202120_AllowFreeFormInvoiceItems') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261111202120_AllowFreeFormInvoiceItems', '9.0.10');
+    END IF;
+END $EF$;
+COMMIT;
