@@ -28,7 +28,9 @@ public sealed record InvoiceListItemDto(
     string? CustomerEmail,
     string? WithholdingCode,
     decimal WithholdingAmount,
-    decimal PayableAmount);
+    decimal PayableAmount,
+    // true: fatura başka yerde kesildi, PDF'i elle yüklendi.
+    bool IsManual = false);
 
 public sealed record InvoiceItemDto(
     Guid Id,
@@ -88,7 +90,9 @@ public sealed record InvoiceDetailDto(
     /// Elle gönderilen son e-posta ("E-posta gönder"; taslak faturalar dahil).
     InvoiceEmailDto? ManualEmail = null,
     /// true: faturaya işler tek tek değil, tek kalem "Nakliye Bedeli" olarak yazılır (iş dökümü değişmez).
-    bool SingleLine = false);
+    bool SingleLine = false,
+    /// true: fatura başka yerde kesildi, PDF'i elle yüklendi (e-Arşiv referansı yoktur).
+    bool IsManual = false);
 
 public sealed record WithholdingTypeDto(string Code, int Rate, string Fraction, string Name);
 

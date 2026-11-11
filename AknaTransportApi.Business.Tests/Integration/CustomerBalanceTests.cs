@@ -40,6 +40,12 @@ public class CustomerBalanceTests(AknaApiFactory factory) : IClassFixture<AknaAp
 
         var overview = await _client.OkAsync<CustomerBalanceOverviewDto>(HttpMethod.Get, "/api/customers/balances?openOnly=true", token: admin);
         Assert.Contains(overview.Items, i => i.CustomerId == customer.Id && i.Balance == ledger.Balance.Balance);
+        // Aylık kırılım: bu ayın satırı en az bu müşterinin hareketlerini içerir; ayların toplamı tüm dönem toplamına eşittir.
+        Assert.NotNull(overview.Months);
+        var month = Assert.Single(overview.Months!, m => m.Year == today.Year && m.Month == today.Month);
+        Assert.True(month.Collected >= 100m && month.Refunded >= 10m);
+        Assert.Equal(overview.Totals.Invoiced, overview.Months!.Sum(m => m.Invoiced));
+        Assert.Equal(overview.Totals.Collected, overview.Months!.Sum(m => m.Collected));
 
         await _client.OkAsync<object>(HttpMethod.Delete, $"/api/customers/{customer.Id}/transactions/{collected.Id}", token: admin);
         await _client.OkAsync<InvoiceDetailDto>(HttpMethod.Post, $"/api/invoices/{draft.Id}/cancel", new CancelInvoiceRequest { Reason = "Hatalı" }, admin);

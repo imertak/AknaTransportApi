@@ -92,7 +92,7 @@ public sealed class OutboxProcessor(
         }
 
         var invoice = await invoices.QueryAsNoTracking().Where(i => i.Id == payload.InvoiceId)
-                          .Select(i => new { i.Status, i.InvoiceNumber, i.EArchiveInvoiceNumber })
+                          .Select(i => new { i.Status, i.InvoiceNumber, i.EArchiveInvoiceNumber, i.EArchiveProvider })
                           .FirstOrDefaultAsync(ct)
                       ?? throw new PermanentOutboxException("Fatura bulunamadı.");
         var manual = log.Type == EmailType.InvoiceManual;
@@ -114,7 +114,10 @@ public sealed class OutboxProcessor(
         if (issued)
         {
             var official = await invoiceService.GetOfficialDocumentAsync(payload.InvoiceId, ct);
-            invoicePdf = official.FromProvider
+            // Elle yüklenen fatura başka yerde kesildi; e-Arşiv adı verilmez.
+            invoicePdf = invoice.EArchiveProvider == Invoice.ManualProvider
+                ? new EmailAttachment($"Fatura_{number}.pdf", official.Content)
+                : official.FromProvider
                 ? new EmailAttachment($"e-Arsiv_Fatura_{number}.pdf", official.Content)
                 : new EmailAttachment($"Fatura-{number}.pdf", official.Content);
             if (!official.FromProvider) original = await invoiceService.GetIssuedEArchiveDocumentAsync(payload.InvoiceId, ct);

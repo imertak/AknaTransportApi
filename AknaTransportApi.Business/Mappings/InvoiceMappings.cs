@@ -14,5 +14,6 @@ public static class InvoiceMappings
         i.Customer!.Email,
         i.WithholdingCode,
         i.WithholdingAmount,
-        i.PayableAmount);
+        i.PayableAmount,
+        i.EArchiveProvider == Invoice.ManualProvider);
 }

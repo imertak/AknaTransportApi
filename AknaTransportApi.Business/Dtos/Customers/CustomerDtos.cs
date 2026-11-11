@@ -107,7 +107,14 @@ public sealed record CustomerBalanceDto(
 
 public sealed record CustomerBalanceTotalsDto(decimal Invoiced, decimal Charged, decimal Collected, decimal Refunded, decimal Balance, int CustomersWithBalance);
 
-public sealed record CustomerBalanceOverviewDto(CustomerBalanceTotalsDto Totals, IReadOnlyList<CustomerBalanceDto> Items);
+/// <summary>Bir aydaki hareketler (fatura tarihi / hareket tarihine göre). Year/Month takvim ayıdır.</summary>
+public sealed record CustomerBalanceMonthDto(int Year, int Month, decimal Invoiced, int InvoiceCount, decimal Charged, decimal Collected, decimal Refunded);
+
+/// <summary>
+/// Totals tüm dönemlerin toplamıdır (bakiye dahil). Months aynı müşterilerin hareketlerini ay ay verir (yeniden eskiye);
+/// hareket olmayan aylar yer almaz.
+/// </summary>
+public sealed record CustomerBalanceOverviewDto(CustomerBalanceTotalsDto Totals, IReadOnlyList<CustomerBalanceDto> Items, IReadOnlyList<CustomerBalanceMonthDto>? Months = null);
 
 public sealed class CustomerBalanceQuery
 {

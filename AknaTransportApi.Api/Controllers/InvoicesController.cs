@@ -90,6 +90,28 @@ public sealed class InvoicesController(IInvoiceService invoiceService) : ApiCont
         return File(file.Content, file.ContentType);
     }
 
+    /// <summary>
+    /// Başka yerde kesilen faturanın PDF'ini yükler (multipart/form-data: file, invoiceNumber). Taslak veya başarısız
+    /// fatura kesilmiş (elle) sayılır ve iş dökümüyle birlikte kullanılabilir. Elle yüklenmiş faturada dosyayı değiştirir.
+    /// Müşteriye otomatik e-posta gönderilmez.
+    /// </summary>
+    [HttpPost("{id:guid}/manual-pdf")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(InvoiceService.ManualPdfMaxBytes + 1024 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = InvoiceService.ManualPdfMaxBytes + 1024 * 1024)]
+    [ProducesResponseType(typeof(BaseResponse), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<BaseResponse<InvoiceDetailDto>>> UploadManualPdf(Guid id, IFormFile? file, [FromForm] string? invoiceNumber, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+            throw new BusinessValidationException("Fatura dosyası seçilmedi.", [new ErrorDetail("file", "Bir PDF dosyası seçin.")]);
+        if (file.Length > InvoiceService.ManualPdfMaxBytes)
+            throw new BusinessValidationException("Fatura dosyası en fazla 10 MB olabilir.", [new ErrorDetail("file", "Dosya çok büyük.")]);
+        using var buffer = new MemoryStream((int)file.Length);
+        await file.CopyToAsync(buffer, ct);
+        var invoice = await invoiceService.UploadManualPdfAsync(id, buffer.ToArray(), invoiceNumber, ct);
+        return Success(invoice, "Fatura yüklendi; iş dökümüyle birlikte kullanılabilir.");
+    }
+
     /// <summary>KDV tevkifat kodları (ör. 624 Yük taşımacılığı 2/10).</summary>
     [HttpGet("withholding-types")]
     public ActionResult<BaseResponse<IReadOnlyList<WithholdingTypeDto>>> WithholdingTypes() =>

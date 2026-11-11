@@ -33,6 +33,13 @@ public interface IInvoiceService
     /// <summary>Sağlayıcının belge görüntüsü (GİB portalı HTML).</summary>
     Task<FileDownload> GetEArchiveViewAsync(Guid id, CancellationToken ct);
 
+    /// <summary>
+    /// Başka yerde kesilen faturanın PDF'ini yükler: taslak/başarısız fatura kesilmiş (Issued, elle) sayılır ve
+    /// yüklenen dosya resmi PDF olarak kullanılır. Elle yüklenmiş faturada dosyayı ve numarayı değiştirir.
+    /// Müşteriye otomatik e-posta gönderilmez; "E-posta gönder" ile fatura ve iş dökümü gönderilebilir.
+    /// </summary>
+    Task<InvoiceDetailDto> UploadManualPdfAsync(Guid id, byte[] content, string? invoiceNumber, CancellationToken ct);
+
     IReadOnlyList<WithholdingTypeDto> GetWithholdingTypes();
     Task<InvoiceDetailDto> CancelAsync(Guid id, CancelInvoiceRequest request, CancellationToken ct);
     /// <summary>İptal edilmiş faturayı kalemleri, e-posta kayıtları ve saklanan PDF'iyle birlikte kalıcı olarak siler.</summary>
