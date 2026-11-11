@@ -32,7 +32,8 @@ public sealed class InvoiceService(
             {
                 g.Key,
                 Count = g.Count(),
-                Total = g.Where(i => i.Status != InvoiceStatus.Cancelled).Sum(i => (decimal?)i.GrandTotal) ?? 0m,
+                // Tevkifatlı faturada müşterinin ödeyeceği tutar (genel toplam − tevkifat) sayılır.
+                Total = g.Where(i => i.Status != InvoiceStatus.Cancelled).Sum(i => (decimal?)i.PayableAmount) ?? 0m,
             })
             .ToListAsync(ct);
         return ListSummaryDto.FromDays(days.Select(d => (d.Key, d.Count, d.Total)));
