@@ -365,7 +365,7 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("InvoiceId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("JobId")
+                    b.Property<Guid?>("JobId")
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("LineTotal")
@@ -1227,8 +1227,7 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
                     b.HasOne("AknaTransportApi.Domain.Entities.TransportJob", "Job")
                         .WithMany()
                         .HasForeignKey("JobId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Invoice");
 

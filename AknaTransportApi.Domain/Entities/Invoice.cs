@@ -55,6 +55,12 @@ public class Invoice : Entity, IHasTimestamps
 
     public bool IsEditable => Status is InvoiceStatus.Draft or InvoiceStatus.Failed;
 
+    /// <summary>
+    /// true: fatura işlerden değil, elle girilen kalemlerden oluşur (işe bağlı olmayan serbest fatura).
+    /// Kalemlerin yüklenmiş olması gerekir.
+    /// </summary>
+    public bool IsFreeForm => Items.Count > 0 && Items.All(x => x.JobId is null);
+
     /// <summary>Elle yüklenen faturanın sağlayıcı adı: fatura başka bir yerde (ör. başka bir firmaya) kesilmiştir.</summary>
     public const string ManualProvider = "Manuel";
 
@@ -192,7 +198,8 @@ public class InvoiceItem : Entity
 {
     public Guid InvoiceId { get; set; }
     public Invoice? Invoice { get; set; }
-    public Guid JobId { get; set; }
+    /// <summary>Kalemin geldiği iş. Boş: işe bağlı olmayan serbest fatura kalemi (açıklama, miktar ve fiyat elle girilir).</summary>
+    public Guid? JobId { get; set; }
     public TransportJob? Job { get; set; }
     public string Description { get; set; } = string.Empty;
     public decimal Quantity { get; set; } = 1;

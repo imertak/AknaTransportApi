@@ -8,6 +8,11 @@ namespace AknaTransportApi.Business.Services.Outbox;
 public static class EmailTemplates
 {
     public const string InvoiceSubject = "AKPINAR NAKLİYAT - Faturanız ve Nakliye İş Dökümünüz";
+    /// <summary>İşe bağlı olmayan serbest faturanın konusu (iş dökümü eklenmez).</summary>
+    public const string FreeFormInvoiceSubject = "AKPINAR NAKLİYAT - Faturanız";
+
+    /// <summary>Kesilmiş fatura e-postasının konusu; serbest faturada iş dökümünden söz edilmez.</summary>
+    public static string IssuedInvoiceSubject(bool hasJobs) => hasJobs ? InvoiceSubject : FreeFormInvoiceSubject;
     public const string PasswordResetSubject = "AKNA Transport - Şifre Sıfırlama";
     private const string LogoContentId = "akna-logo";
 
@@ -23,15 +28,22 @@ public static class EmailTemplates
         return new EmailAttachment("akna-logo.png", buffer.ToArray(), "image/png") { ContentId = LogoContentId };
     }
 
-    public static string DraftInvoiceSubject(string invoiceNumber) => $"AKPINAR NAKLİYAT - Fatura Taslağı ve Nakliye İş Dökümü ({invoiceNumber})";
+    public static string DraftInvoiceSubject(string invoiceNumber, bool hasJobs = true) => hasJobs
+        ? $"AKPINAR NAKLİYAT - Fatura Taslağı ve Nakliye İş Dökümü ({invoiceNumber})"
+        : $"AKPINAR NAKLİYAT - Fatura Taslağı ({invoiceNumber})";
 
     public static (string Html, string Text) Invoice(InvoiceEmailModel m)
     {
         var amount = Money(m.Payable, m.Currency);
         var date = m.InvoiceDate.ToString("dd.MM.yyyy", Tr);
-        var intro = m.Draft
-            ? "Akpınar Nakliyat üzerinden gerçekleştirdiğiniz nakliye hizmetlerine ait fatura taslağınız hazırlanmıştır. Kontrolünüz için taslak fatura ve iş dökümü ektedir."
-            : "Akpınar Nakliyat üzerinden gerçekleştirdiğiniz nakliye hizmetlerine ait faturanız kesilmiştir. Faturanızı ve ilgili nakliye işlerinin detaylı dökümünü ekte bulabilirsiniz.";
+        var hasJobs = m.JobCount > 0;
+        var intro = (m.Draft, hasJobs) switch
+        {
+            (true, true) => "Akpınar Nakliyat üzerinden gerçekleştirdiğiniz nakliye hizmetlerine ait fatura taslağınız hazırlanmıştır. Kontrolünüz için taslak fatura ve iş dökümü ektedir.",
+            (false, true) => "Akpınar Nakliyat üzerinden gerçekleştirdiğiniz nakliye hizmetlerine ait faturanız kesilmiştir. Faturanızı ve ilgili nakliye işlerinin detaylı dökümünü ekte bulabilirsiniz.",
+            (true, false) => "Akpınar Nakliyat tarafından adınıza fatura taslağı hazırlanmıştır. Kontrolünüz için taslak fatura ektedir.",
+            (false, false) => "Akpınar Nakliyat tarafından adınıza faturanız kesilmiştir. Faturanızı ekte bulabilirsiniz.",
+        };
         const string draftNote = "Bu belge taslaktır ve resmi fatura yerine geçmez. Resmi e-Arşiv faturanız kesildiğinde ayrıca gönderilecektir.";
         var bank = m.Iban is null ? null : m.BankName is null ? m.Iban : $"{m.Iban} ({m.BankName})";
 
@@ -42,7 +54,7 @@ public static class EmailTemplates
             {(m.Draft ? "\n" + draftNote + "\n" : "")}
             {(m.Draft ? "Taslak no" : "Fatura no")}: {m.InvoiceNumber}
             Tarih: {date}
-            İş sayısı: {m.JobCount}
+            {(hasJobs ? $"İş sayısı: {m.JobCount}" : "")}
             Ara toplam: {Money(m.SubTotal, m.Currency)} + KDV
             KDV: {Money(m.VatAmount, m.Currency)}
             Ödenecek tutar: {amount}
@@ -57,10 +69,11 @@ public static class EmailTemplates
         {
             (m.Draft ? "Taslak no" : "Fatura no", m.InvoiceNumber),
             ("Tarih", date),
-            ("İş sayısı", $"{m.JobCount} adet"),
             ("Ara toplam", $"{Money(m.SubTotal, m.Currency)} + KDV"),
             ("KDV", Money(m.VatAmount, m.Currency)),
         };
+        // Serbest (işe bağlı olmayan) faturada iş sayısı gösterilmez.
+        if (hasJobs) rows.Insert(2, ("İş sayısı", $"{m.JobCount} adet"));
         var rowsHtml = string.Concat(rows.Select(r => $"""
             <tr><td style="padding:8px 0;color:#6b6b70;font-size:13px">{Encode(r.Label)}</td><td align="right" style="padding:8px 0;font-size:13px;font-weight:600;color:#0b0b0c">{Encode(r.Value)}</td></tr>
             """));

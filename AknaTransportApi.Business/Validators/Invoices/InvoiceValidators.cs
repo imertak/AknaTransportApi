@@ -1,15 +1,55 @@
 using FluentValidation;
 using System.Linq.Expressions;
+using AknaTransportApi.Business.Validators.Customers;
 
 namespace AknaTransportApi.Business.Validators.Invoices;
+
+public sealed class InvoiceLineRequestValidator : AbstractValidator<InvoiceLineRequest>
+{
+    public InvoiceLineRequestValidator()
+    {
+        RuleFor(x => x.Description).NotEmpty().WithMessage("Kalem açıklaması zorunludur.").MaximumLength(500);
+        RuleFor(x => x.Quantity).GreaterThan(0).WithMessage("Miktar sıfırdan büyük olmalıdır.").LessThanOrEqualTo(1_000_000);
+        RuleFor(x => x.UnitPrice).GreaterThan(0).WithMessage("Birim fiyat sıfırdan büyük olmalıdır.").LessThanOrEqualTo(100_000_000);
+    }
+}
+
+/// <summary>Serbest faturada kayıtlı olmayan müşteri: e-Arşiv için VKN/TCKN, fatura e-postası için e-posta zorunludur.</summary>
+internal sealed class NewInvoiceCustomerValidator : AbstractValidator<CustomerRequest>
+{
+    public NewInvoiceCustomerValidator()
+    {
+        Include(new CustomerRequestValidator());
+        RuleFor(x => x.TaxNumber).NotEmpty().WithMessage("VKN veya TCKN zorunludur.");
+        RuleFor(x => x).Must(x => Text.IsValidEmail((x.Emails?.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e)) ?? x.Email)?.Trim()))
+            .WithName("email").WithMessage("Fatura gönderilebilmesi için geçerli bir e-posta adresi zorunludur.");
+    }
+}
 
 public sealed class CreateInvoiceRequestValidator : AbstractValidator<CreateInvoiceRequest>
 {
     public CreateInvoiceRequestValidator()
     {
-        RuleFor(x => x.JobIds).NotEmpty().WithMessage("En az bir iş seçilmelidir.")
+        RuleFor(x => x.JobIds)
             .Must(ids => ids.Count <= 500).WithMessage("Bir faturada en fazla 500 iş bulunabilir.")
             .Must(ids => ids.Distinct().Count() == ids.Count).WithMessage("Aynı iş birden fazla kez seçilemez.");
+        // İşlerden fatura: kalem ve müşteri işlerden gelir.
+        When(x => x.JobIds.Count > 0, () =>
+        {
+            RuleFor(x => x.Lines).Empty().WithMessage("İşlerden kesilen faturaya ayrıca kalem eklenemez.");
+            RuleFor(x => x.CustomerId).Null().WithMessage("İşlerden kesilen faturada müşteri işlerden alınır.");
+            RuleFor(x => x.NewCustomer).Null().WithMessage("İşlerden kesilen faturada müşteri işlerden alınır.");
+        });
+        // Serbest fatura: kayıtlı müşteri veya yeni müşteri ve en az bir kalem.
+        When(x => x.JobIds.Count == 0, () =>
+        {
+            RuleFor(x => x.Lines).NotEmpty().WithMessage("En az bir iş seçin veya fatura kalemi girin.")
+                .Must(l => l.Count <= 100).WithMessage("Bir faturada en fazla 100 kalem bulunabilir.");
+            RuleForEach(x => x.Lines).SetValidator(new InvoiceLineRequestValidator());
+            RuleFor(x => x).Must(x => x.CustomerId.HasValue != (x.NewCustomer is not null))
+                .WithName("customerId").WithMessage("Kayıtlı bir müşteri seçin veya yeni müşteri bilgilerini girin.");
+            RuleFor(x => x.NewCustomer!).SetValidator(new NewInvoiceCustomerValidator()).When(x => x.NewCustomer is not null);
+        });
         RuleFor(x => x.VatRate).InclusiveBetween(0, 100).When(x => x.VatRate.HasValue).WithMessage("KDV oranı 0 ile 100 arasında olmalıdır.");
         RuleFor(x => x.Notes).MaximumLength(1000);
         RuleFor(x => x.WithholdingCode).Must(c => WithholdingTypes.Find(c) is not null)
@@ -22,8 +62,11 @@ public sealed class UpdateInvoiceRequestValidator : AbstractValidator<UpdateInvo
 {
     public UpdateInvoiceRequestValidator()
     {
-        RuleFor(x => x.JobIds).NotEmpty().WithMessage("En az bir iş seçilmelidir.")
-            .Must(ids => ids.Distinct().Count() == ids.Count).WithMessage("Aynı iş birden fazla kez seçilemez.");
+        RuleFor(x => x.JobIds).Must(ids => ids.Distinct().Count() == ids.Count).WithMessage("Aynı iş birden fazla kez seçilemez.");
+        RuleFor(x => x).Must(x => (x.JobIds.Count > 0) != (x.Lines.Count > 0))
+            .WithName("jobIds").WithMessage("Faturada ya işler ya da elle girilen kalemler bulunmalıdır.");
+        RuleFor(x => x.Lines).Must(l => l.Count <= 100).WithMessage("Bir faturada en fazla 100 kalem bulunabilir.");
+        RuleForEach(x => x.Lines).SetValidator(new InvoiceLineRequestValidator());
         RuleFor(x => x.InvoiceDate).NotEmpty().WithMessage("Fatura tarihi zorunludur.");
         RuleFor(x => x.VatRate).InclusiveBetween(0, 100).WithMessage("KDV oranı 0 ile 100 arasında olmalıdır.");
         RuleFor(x => x.Notes).MaximumLength(1000);
