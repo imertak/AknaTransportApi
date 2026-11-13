@@ -9,6 +9,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider c
 {
     public const string JobNumberSequence = "job_number_seq";
     public const string InvoiceNumberSequence = "invoice_number_seq";
+    public const string OfferNumberSequence = "offer_number_seq";
 
     public DbSet<User> Users => Set<User>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
@@ -30,6 +31,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider c
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<PushDevice> PushDevices => Set<PushDevice>();
     public DbSet<CustomerTransaction> CustomerTransactions => Set<CustomerTransaction>();
+    public DbSet<TransportOffer> TransportOffers => Set<TransportOffer>();
+    public DbSet<TransportOfferItem> TransportOfferItems => Set<TransportOfferItem>();
+    public DbSet<TransportOfferHistory> TransportOfferHistories => Set<TransportOfferHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -48,6 +52,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider c
         {
             modelBuilder.HasSequence<long>(JobNumberSequence).StartsAt(1).IncrementsBy(1);
             modelBuilder.HasSequence<long>(InvoiceNumberSequence).StartsAt(1).IncrementsBy(1);
+            modelBuilder.HasSequence<long>(OfferNumberSequence).StartsAt(1).IncrementsBy(1);
         }
     }
 

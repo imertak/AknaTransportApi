@@ -121,3 +121,30 @@ public enum CustomerTransactionType
     /// <summary>Faturasız borç kaydı (devir / açılış bakiyesi vb.). Bakiyeyi artırır.</summary>
     Charge = 2,
 }
+
+/// <summary>
+/// Nakliye teklifinin durumu. <see cref="Expired"/> veritabanında saklanmaz: geçerlilik tarihi geçmiş taslak veya
+/// yanıt bekleyen teklif okunurken "süresi doldu" olarak gösterilir. Geçerlilik tarihi uzatılırsa teklif eski durumuna döner.
+/// </summary>
+public enum TransportOfferStatus
+{
+    /// <summary>Taslak: henüz müşteriye gönderilmedi.</summary>
+    Draft = 0,
+    /// <summary>Müşteriye gönderildi, yanıt bekleniyor.</summary>
+    Pending = 1,
+    /// <summary>Müşteri kabul etti. Fiyat ve taşıma bilgileri kilitlenir; nakliye işine dönüştürülebilir.</summary>
+    Accepted = 2,
+    /// <summary>Müşteri reddetti.</summary>
+    Rejected = 3,
+    /// <summary>Geçerlilik süresi doldu (yalnızca okunurken türetilir).</summary>
+    Expired = 4,
+    /// <summary>Teklif firmamız tarafından geri çekildi / iptal edildi.</summary>
+    Cancelled = 5,
+}
+
+/// <summary>Taşıma türü: komple (araç tek müşteriye) veya parsiyel (araç paylaşımlı).</summary>
+public enum TransportType
+{
+    Full = 0,
+    Partial = 1,
+}

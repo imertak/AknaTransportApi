@@ -26,6 +26,8 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
 
             modelBuilder.HasSequence("job_number_seq");
 
+            modelBuilder.HasSequence("offer_number_seq");
+
             modelBuilder.Entity("AknaTransportApi.Domain.Entities.Customer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -948,6 +950,292 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AknaTransportApi.Domain.Entities.TransportOffer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CargoDescription")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContactPerson")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<DateTime?>("ConvertedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ConvertedJobId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CopiedFromOfferId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("CustomerAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("CustomerEmail")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CustomerName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CustomerNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("CustomerPhone")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("DeliveryDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("DeliveryTerms")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal?>("DistanceKm")
+                        .HasPrecision(10, 1)
+                        .HasColumnType("numeric(10,1)");
+
+                    b.Property<string>("InternalNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("LoadingAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateOnly?>("LoadingDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("LoadingPoint")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateOnly>("OfferDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("OfferNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("PaymentTerms")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("RejectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("SubTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("TransportType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("UnloadingAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("UnloadingPoint")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("ValidUntil")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("VatAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("VatRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<string>("VehicleType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConvertedJobId")
+                        .IsUnique();
+
+                    b.HasIndex("CopiedFromOfferId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("DeletedByUserId");
+
+                    b.HasIndex("OfferDate");
+
+                    b.HasIndex("OfferNumber")
+                        .IsUnique();
+
+                    b.HasIndex("CustomerId", "OfferDate");
+
+                    b.HasIndex("Status", "ValidUntil");
+
+                    b.ToTable("transport_offers", (string)null);
+                });
+
+            modelBuilder.Entity("AknaTransportApi.Domain.Entities.TransportOfferHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ChangedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("NewStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("OldStatus")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("TransportOfferId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChangedByUserId");
+
+                    b.HasIndex("TransportOfferId", "CreatedAt");
+
+                    b.ToTable("transport_offer_histories", (string)null);
+                });
+
+            modelBuilder.Entity("AknaTransportApi.Domain.Entities.TransportOfferItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TotalPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("TransportOfferId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Unit")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TransportOfferId", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("transport_offer_items", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_transport_offer_items_quantity", "\"Quantity\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("AknaTransportApi.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1410,6 +1698,72 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
                     b.Navigation("TransportJob");
                 });
 
+            modelBuilder.Entity("AknaTransportApi.Domain.Entities.TransportOffer", b =>
+                {
+                    b.HasOne("AknaTransportApi.Domain.Entities.TransportJob", "ConvertedJob")
+                        .WithMany()
+                        .HasForeignKey("ConvertedJobId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("AknaTransportApi.Domain.Entities.TransportOffer", null)
+                        .WithMany()
+                        .HasForeignKey("CopiedFromOfferId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("AknaTransportApi.Domain.Entities.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("AknaTransportApi.Domain.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("AknaTransportApi.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("DeletedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ConvertedJob");
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("AknaTransportApi.Domain.Entities.TransportOfferHistory", b =>
+                {
+                    b.HasOne("AknaTransportApi.Domain.Entities.User", "ChangedByUser")
+                        .WithMany()
+                        .HasForeignKey("ChangedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("AknaTransportApi.Domain.Entities.TransportOffer", "TransportOffer")
+                        .WithMany("History")
+                        .HasForeignKey("TransportOfferId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ChangedByUser");
+
+                    b.Navigation("TransportOffer");
+                });
+
+            modelBuilder.Entity("AknaTransportApi.Domain.Entities.TransportOfferItem", b =>
+                {
+                    b.HasOne("AknaTransportApi.Domain.Entities.TransportOffer", "TransportOffer")
+                        .WithMany("Items")
+                        .HasForeignKey("TransportOfferId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TransportOffer");
+                });
+
             modelBuilder.Entity("AknaTransportApi.Domain.Entities.Customer", b =>
                 {
                     b.Navigation("Invoices");
@@ -1429,6 +1783,13 @@ namespace AknaTransportApi.Infrastructure.Persistence.Migrations
                     b.Navigation("StatusHistory");
 
                     b.Navigation("Stops");
+                });
+
+            modelBuilder.Entity("AknaTransportApi.Domain.Entities.TransportOffer", b =>
+                {
+                    b.Navigation("History");
+
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("AknaTransportApi.Domain.Entities.User", b =>

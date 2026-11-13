@@ -1126,3 +1126,199 @@ BEGIN
     END IF;
 END $EF$;
 COMMIT;
+
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113123756_AddTransportOffers') THEN
+    CREATE SEQUENCE offer_number_seq START WITH 1 INCREMENT BY 1 NO CYCLE;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113123756_AddTransportOffers') THEN
+    CREATE TABLE transport_offers (
+        "Id" uuid NOT NULL,
+        "OfferNumber" character varying(30) NOT NULL,
+        "OfferDate" date NOT NULL,
+        "ValidUntil" date NOT NULL,
+        "CustomerId" uuid NOT NULL,
+        "CustomerName" character varying(200) NOT NULL,
+        "ContactPerson" character varying(150),
+        "CustomerPhone" character varying(30),
+        "CustomerEmail" character varying(200),
+        "CustomerAddress" character varying(500),
+        "LoadingPoint" character varying(200) NOT NULL,
+        "LoadingAddress" character varying(500),
+        "UnloadingPoint" character varying(200) NOT NULL,
+        "UnloadingAddress" character varying(500),
+        "TransportType" character varying(20) NOT NULL,
+        "VehicleType" character varying(50) NOT NULL,
+        "CargoDescription" character varying(1000),
+        "LoadingDate" date,
+        "DeliveryDate" date,
+        "DistanceKm" numeric(10,1),
+        "SubTotal" numeric(18,2) NOT NULL,
+        "DiscountAmount" numeric(18,2) NOT NULL,
+        "VatRate" numeric(5,2) NOT NULL,
+        "VatAmount" numeric(18,2) NOT NULL,
+        "TotalAmount" numeric(18,2) NOT NULL,
+        "Currency" character varying(3) NOT NULL,
+        "PaymentTerms" character varying(2000),
+        "DeliveryTerms" character varying(2000),
+        "CustomerNotes" character varying(2000),
+        "InternalNotes" character varying(2000),
+        "Status" character varying(20) NOT NULL,
+        "SentAt" timestamp with time zone,
+        "AcceptedAt" timestamp with time zone,
+        "RejectedAt" timestamp with time zone,
+        "RejectionReason" character varying(500),
+        "CancelledAt" timestamp with time zone,
+        "CancellationReason" character varying(500),
+        "ConvertedJobId" uuid,
+        "ConvertedAt" timestamp with time zone,
+        "CopiedFromOfferId" uuid,
+        "CreatedByUserId" uuid NOT NULL,
+        "IsDeleted" boolean NOT NULL DEFAULT FALSE,
+        "DeletedAt" timestamp with time zone,
+        "DeletedByUserId" uuid,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        "ConcurrencyStamp" uuid NOT NULL,
+        CONSTRAINT "PK_transport_offers" PRIMARY KEY ("Id"),
+        CONSTRAINT "FK_transport_offers_customers_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES customers ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_transport_offers_transport_jobs_ConvertedJobId" FOREIGN KEY ("ConvertedJobId") REFERENCES transport_jobs ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_transport_offers_transport_offers_CopiedFromOfferId" FOREIGN KEY ("CopiedFromOfferId") REFERENCES transport_offers ("Id") ON DELETE SET NULL,
+        CONSTRAINT "FK_transport_offers_users_CreatedByUserId" FOREIGN KEY ("CreatedByUserId") REFERENCES users ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_transport_offers_users_DeletedByUserId" FOREIGN KEY ("DeletedByUserId") REFERENCES users ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113123756_AddTransportOffers') THEN
+    CREATE TABLE transport_offer_histories (
+        "Id" uuid NOT NULL,
+        "TransportOfferId" uuid NOT NULL,
+        "OldStatus" character varying(20),
+        "NewStatus" character varying(20) NOT NULL,
+        "Description" character varying(1000),
+        "ChangedByUserId" uuid NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        CONSTRAINT "PK_transport_offer_histories" PRIMARY KEY ("Id"),
+        CONSTRAINT "FK_transport_offer_histories_transport_offers_TransportOfferId" FOREIGN KEY ("TransportOfferId") REFERENCES transport_offers ("Id") ON DELETE CASCADE,
+        CONSTRAINT "FK_transport_offer_histories_users_ChangedByUserId" FOREIGN KEY ("ChangedByUserId") REFERENCES users ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113123756_AddTransportOffers') THEN
+    CREATE TABLE transport_offer_items (
+        "Id" uuid NOT NULL,
+        "TransportOfferId" uuid NOT NULL,
+        "Sequence" integer NOT NULL,
+        "Description" character varying(300) NOT NULL,
+        "Unit" character varying(20),
+        "Quantity" numeric(18,3) NOT NULL,
+        "UnitPrice" numeric(18,2) NOT NULL,
+        "TotalPrice" numeric(18,2) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        CONSTRAINT "PK_transport_offer_items" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_transport_offer_items_quantity" CHECK ("Quantity" > 0),
+        CONSTRAINT "FK_transport_offer_items_transport_offers_TransportOfferId" FOREIGN KEY ("TransportOfferId") REFERENCES transport_offers ("Id") ON DELETE CASCADE
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113123756_AddTransportOffers') THEN
+    CREATE INDEX "IX_transport_offer_histories_ChangedByUserId" ON transport_offer_histories ("ChangedByUserId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113123756_AddTransportOffers') THEN
+    CREATE INDEX "IX_transport_offer_histories_TransportOfferId_CreatedAt" ON transport_offer_histories ("TransportOfferId", "CreatedAt");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113123756_AddTransportOffers') THEN
+    CREATE UNIQUE INDEX "IX_transport_offer_items_TransportOfferId_Sequence" ON transport_offer_items ("TransportOfferId", "Sequence");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113123756_AddTransportOffers') THEN
+    CREATE UNIQUE INDEX "IX_transport_offers_ConvertedJobId" ON transport_offers ("ConvertedJobId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113123756_AddTransportOffers') THEN
+    CREATE INDEX "IX_transport_offers_CopiedFromOfferId" ON transport_offers ("CopiedFromOfferId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113123756_AddTransportOffers') THEN
+    CREATE INDEX "IX_transport_offers_CreatedByUserId" ON transport_offers ("CreatedByUserId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113123756_AddTransportOffers') THEN
+    CREATE INDEX "IX_transport_offers_CustomerId_OfferDate" ON transport_offers ("CustomerId", "OfferDate");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113123756_AddTransportOffers') THEN
+    CREATE INDEX "IX_transport_offers_DeletedByUserId" ON transport_offers ("DeletedByUserId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113123756_AddTransportOffers') THEN
+    CREATE INDEX "IX_transport_offers_OfferDate" ON transport_offers ("OfferDate");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113123756_AddTransportOffers') THEN
+    CREATE UNIQUE INDEX "IX_transport_offers_OfferNumber" ON transport_offers ("OfferNumber");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113123756_AddTransportOffers') THEN
+    CREATE INDEX "IX_transport_offers_Status_ValidUntil" ON transport_offers ("Status", "ValidUntil");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113123756_AddTransportOffers') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261113123756_AddTransportOffers', '9.0.10');
+    END IF;
+END $EF$;
+COMMIT;
+
