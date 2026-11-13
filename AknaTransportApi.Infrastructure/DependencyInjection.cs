@@ -69,6 +69,7 @@ public static class DependencyInjection
         services.AddEArchiveProvider<GibPortalEArchiveAdapter>();
         services.AddSingleton<IJobReportPdfGenerator, QuestPdfJobReportGenerator>();
         services.AddSingleton<IDraftInvoicePdfGenerator, QuestPdfDraftInvoiceGenerator>();
+        services.AddSingleton<ITransportOfferPdfGenerator, QuestPdfTransportOfferGenerator>();
         services.Configure<HtmlPdfOptions>(configuration.GetSection(HtmlPdfOptions.SectionName));
         services.AddSingleton<IHtmlPdfRenderer, ChromeHtmlPdfRenderer>();
         services.AddSingleton<IFileStorage, LocalFileStorage>();

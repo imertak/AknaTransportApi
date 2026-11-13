@@ -16,9 +16,10 @@ AKNA Transport nakliye ve lojistik yönetim sisteminin backend'i. .NET 9, ASP.NE
 10. [SMS ile kullanıcı şifresi](#sms-ile-kullanıcı-şifresi)
 11. [Bildirimler](#bildirimler)
 12. [PDF iş dökümü](#pdf-iş-dökümü)
-13. [Mobil uygulama entegrasyonu](#mobil-uygulama-entegrasyonu)
-14. [Testler](#testler)
-15. [Gerçek sağlayıcı bilgisi bekleyen entegrasyonlar](#gerçek-sağlayıcı-bilgisi-bekleyen-entegrasyonlar)
+13. [Nakliye teklifleri](#nakliye-teklifleri)
+14. [Mobil uygulama entegrasyonu](#mobil-uygulama-entegrasyonu)
+15. [Testler](#testler)
+16. [Gerçek sağlayıcı bilgisi bekleyen entegrasyonlar](#gerçek-sağlayıcı-bilgisi-bekleyen-entegrasyonlar)
 
 ## Mimari
 
@@ -137,7 +138,9 @@ Veritabanı notları:
 | `EArchive__Username`, `EArchive__Password` | GİB portalı için | e-Arşiv portalı kullanıcı kodu ve şifresi (İnteraktif Vergi Dairesi'nden alınır). |
 | `EArchive__UseTestEnvironment` | Hayır | `true`: GİB test portalı (earsivportaltest.efatura.gov.tr) |
 | `EArchive__ApiUrl`, `EArchive__ApiKey` | Özel entegratör için | Bkz. [e-Arşiv](#fatura-e-arşiv-ve-e-posta) |
-| `App__CompanyIban`, `App__CompanyBankName` | Önerilir | Faturanın açıklamasına yazılan IBAN ve banka adı (istekte IBAN verilmezse) |
+| `App__CompanyIban`, `App__CompanyBankName` | Önerilir | Faturanın açıklamasına yazılan IBAN ve banka adı (istekte IBAN verilmezse). Teklif PDF'inin koşullar bölümünde de gösterilir. |
+| `App__CompanyAddress`, `App__CompanyPhone`, `App__CompanyEmail`, `App__CompanyWebsite` | Önerilir | Teklif PDF'inin başlığında logonun yanında yazılan firma iletişim bilgileri. Boş olan satır PDF'te gösterilmez. |
+| `App__CompanyTaxOffice`, `App__CompanyTaxNumber` | Hayır | Teklif PDF'inin başlığındaki vergi dairesi ve vergi numarası |
 | `App__DefaultWithholdingCode` | Hayır | Varsayılan KDV tevkifat kodu (ör. `624`). Boşsa faturalar tevkifatsız açılır. |
 | `App__PasswordResetUrl` | Hayır | Şifre sıfırlama bağlantısı, `{token}` ve `{email}` yer tutucuları |
 | `App__TrackingUrl` | Hayır | Müşteri takip bağlantısı, `{token}` yer tutucusu (yoksa `?t=<token>` eklenir). Boşsa API'nin kendi takip sayfası kullanılır: `https://<api>/takip/?t=<token>` |
@@ -291,6 +294,9 @@ GİB portalı ile imza: `POST /{id}/earchive/sms` (imza SMS'i), `POST /{id}/earc
 Oluşturma/güncelleme isteğinde `withholdingCode` (ör. `"624"`), `noWithholding` ve `iban` alanları vardır. Yanıtta `withholdingAmount`, `payableAmount` (genel toplam − tevkifat), `amountInWords` ("YALNIZ: ... TÜRK LİRASI"), `iban`, `documentNote` ve `requiresSmsSignature` döner.
 
 Bir faturaya aynı müşterinin iptal edilmemiş ve başka faturada olmayan işleri eklenebilir; yönetici işi tamamlanmadan da faturalayabilir (ön fatura / peşin tahsilat). Faturaya eklenen iş yürümeye devam eder ve tamamlanabilir, ancak düzenlenemez ve iptal edilemez. İş, taslak oluşturulurken `transport_jobs.InvoiceId` koşullu güncellemesiyle (yalnızca `InvoiceId IS NULL` satırlar, transaction içinde) faturaya bağlanır; bu yüzden aynı iş eşzamanlı iki faturaya eklenemez. Kesim öncesinde her işin hâlâ bu faturaya bağlı ve iptal edilmemiş olduğu yeniden doğrulanır.
+
+### Nakliye teklifleri — `/api/transport-offers` (Admin)
+`GET /` (sayfalı liste; `search` teklif no veya müşteri, `customerId`, `status` (birden çok verilebilir), `startDate`, `endDate`, `page`, `pageSize`), `GET /stats`, `GET /{id}`, `POST /`, `PUT /{id}`, `POST /{id}/copy`, `POST /{id}/send`, `POST /{id}/accept`, `POST /{id}/reject` (`{reason}`), `POST /{id}/cancel` (`{reason}`), `DELETE /{id}`, `GET /{id}/pdf`, `POST /{id}/convert-to-job`. Ayrıntılar: [Nakliye teklifleri](#nakliye-teklifleri).
 
 ### Raporlar — `/api/reports` (Admin)
 `GET /jobs/pdf`, `GET /jobs/summary`, `GET /jobs` — parametreler: `startDate`, `endDate`, `customerId`, `driverId`, `storeName`, `vehicleType`, `scope` (`Completed` varsayılan, `NotCancelled`, `All`).
@@ -456,6 +462,18 @@ Sahte (fake) bir sağlayıcı üretim koduna eklenmemiştir. Testlerdeki sahte a
 - Alt bölüm: toplam iş sayısı ve toplam nakliye tutarı; footer'da oluşturulma tarihi (İstanbul saati), kurumsal satır ve "Sayfa x / y".
 - Varsayılan yalnızca tamamlanan işler; `scope=NotCancelled` veya `scope=All` ile diğer durumlar.
 - PDF üretimi Infrastructure katmanındadır (`QuestPdfJobReportGenerator`).
+
+## Nakliye teklifleri
+
+Müşteriye verilen fiyat teklifleri; kabul edilen teklif tek tıkla nakliye işine dönüştürülür.
+
+- **Numara:** `AKT-YYYY-NNNNNN` (PostgreSQL `offer_number_seq`, benzersiz index). `AKN-` öneki nakliye işlerinde kullanıldığı için tekliflerde `AKT-` kullanılır.
+- **Durumlar:** `Draft` (taslak) → `Pending` (müşteriye gönderildi) → `Accepted` / `Rejected`; ayrıca `Cancelled`. `Expired` saklanmaz, okuma sırasında türetilir: `Draft` veya `Pending` teklifin `validUntil` tarihi (İstanbul saatine göre) geçtiyse `Expired` döner. Süresi dolan teklif düzenlenip geçerlilik tarihi uzatılırsa yeniden açılır. Yanıttaki `storedStatus` veritabanındaki ham durumu verir.
+- **Geçişler:** gönder yalnızca taslaktan (beklemedeki teklifte etkisizdir); kabul/ret yalnızca taslak veya beklemedeki, süresi dolmamış teklifte; iptal reddedilmemiş ve işe dönüştürülmemiş teklifte; silme (soft delete) kabul edilmemiş ve dönüştürülmemiş teklifte. Geçersiz geçiş `409` döner. Kabul edilen teklif kilitlenir; değiştirmek için kopyalanır. Her geçiş `transport_offer_histories` tablosuna kullanıcı ve zamanla yazılır.
+- **Tutarlar sunucuda hesaplanır:** kalem toplamı = miktar × birim fiyat (2 hane), ara toplam − iskonto = net, KDV = net × oran, genel toplam = net + KDV. İstemcinin gönderdiği toplamlar dikkate alınmaz. İskonto ara toplamdan küçük olmalıdır. Para birimi yalnızca `TRY` (işler ve faturalar TL olduğu için).
+- **Müşteri:** `customerId` ile mevcut müşteri seçilir ya da `customer` nesnesiyle aynı işlemde yeni müşteri oluşturulur. Müşteri adı, yetkili, telefon, e-posta ve adres teklife kopyalanır; müşteri kaydı sonradan değişse de teklif ve PDF ilk hâliyle kalır.
+- **PDF:** `GET /{id}/pdf`, dosya adı `AKNA_Teklif_AKT-2026-000125.pdf`. A4 dikey, siyah-beyaz, logo, firma ve müşteri bilgileri, güzergâh, kalemler, iskonto/KDV/genel toplam ve yazıyla tutar, teklif koşulları, imza alanları. `internalNotes` PDF'e yazılmaz; `customerNotes` yazılır. Üretim `QuestPdfTransportOfferGenerator` (Infrastructure).
+- **İşe dönüştürme:** `POST /{id}/convert-to-job` yalnızca kabul edilen tekliflerde çalışır ve tek transaction içinde mevcut `JobService.CreateAsync` ile iş oluşturur (müşteri, araç tipi, yükleme/teslim noktaları, iş tarihi = yükleme tarihi ya da bugün, fiyat = KDV hariç net tutar, notlarda teklif no ve koşullar). Teklif satırı önce koşullu `UPDATE` ile kilitlenir (`Status = Accepted AND ConvertedJobId IS NULL`); eşzamanlı ikinci istek `409` alır, `ConvertedJobId` üzerindeki benzersiz index de aynı tekliften ikinci işi engeller. İş oluşturma hata verirse teklif değişmez.
 
 ## Mobil uygulama entegrasyonu
 

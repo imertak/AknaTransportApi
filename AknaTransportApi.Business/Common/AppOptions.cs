@@ -24,6 +24,23 @@ public sealed class AppOptions
     /// <summary>IBAN'ın ait olduğu banka adı (ör. "Ziraat Bankası"). Faturada IBAN ile birlikte yazılır.</summary>
     public string? CompanyBankName { get; set; }
 
+    /// <summary>Teklif PDF'inin başlığında ve altında yazılan firma adresi (App__CompanyAddress).</summary>
+    public string? CompanyAddress { get; set; }
+
+    /// <summary>Teklif PDF'indeki firma telefonu (App__CompanyPhone).</summary>
+    public string? CompanyPhone { get; set; }
+
+    /// <summary>Teklif PDF'indeki firma e-posta adresi (App__CompanyEmail).</summary>
+    public string? CompanyEmail { get; set; }
+
+    /// <summary>Teklif PDF'indeki web adresi (App__CompanyWebsite).</summary>
+    public string? CompanyWebsite { get; set; }
+
+    /// <summary>Teklif PDF'indeki firma vergi dairesi ve numarası (App__CompanyTaxOffice, App__CompanyTaxNumber).</summary>
+    public string? CompanyTaxOffice { get; set; }
+
+    public string? CompanyTaxNumber { get; set; }
+
     /// <summary>Varsayılan KDV tevkifat kodu (ör. 624 Yük taşımacılığı). Boşsa faturalar tevkifatsız açılır.</summary>
     public string? DefaultWithholdingCode { get; set; }
 
